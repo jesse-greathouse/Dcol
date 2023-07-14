@@ -34,6 +34,7 @@ bin/*-e
 bin/composer
 bin/composer.phar
 bin/php
+bin/laravel
 
 # etc
 etc/php/php.ini

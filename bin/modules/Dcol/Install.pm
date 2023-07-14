@@ -20,9 +20,9 @@ my $os = get_operating_system();
 my $osModule = 'Dcol::Install::' . $os;
 eval "use $osModule qw(
     install_system_dependencies
-    install_php 
-    install_perl_modules 
-    install_pear 
+    install_php
+    install_perl_modules
+    install_pear
     install_imagick
     install_composer
     install_symlinks

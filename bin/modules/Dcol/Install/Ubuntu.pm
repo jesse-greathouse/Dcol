@@ -244,8 +244,10 @@ sub install_symlinks {
     my ($dir) = @_;
     my $binDir = $dir . '/bin';
     my $optDir = $dir . '/opt';
+    my $vendorDir = $dir . '/vendor';
     symlink("$optDir/php/bin/php", "$binDir/php");
     symlink("$binDir/composer.phar", "$binDir/composer");
+    symlink("$vendorDir/bin/laravel", "$binDir/laravel");
 }
 
 sub cleanup {

@@ -39,7 +39,7 @@ bin/php
 etc/php/php.ini
 etc/php/hidden.ini
 etc/php-fpm.d/php-fpm.conf
-etc/php-fpm.d/*.default
+etc/**/*.default
 
 # opt
 opt/php*/*

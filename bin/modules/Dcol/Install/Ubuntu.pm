@@ -13,6 +13,7 @@ our @EXPORT_OK = qw(
     install_imagick
     install_composer
     install_symlinks
+    install_composer_dependencies
     cleanup
 );
 
@@ -248,6 +249,18 @@ sub install_symlinks {
     symlink("$optDir/php/bin/php", "$binDir/php");
     symlink("$binDir/composer.phar", "$binDir/composer");
     symlink("$vendorDir/bin/laravel", "$binDir/laravel");
+}
+
+# installs composer dependencies.
+sub install_composer_dependencies {
+    my ($dir) = @_;
+    my $binDir = $dir . '/bin';
+    my $phpExecutable = $binDir . '/php';
+    my $composerExecutable = "$phpExecutable $binDir/composer";
+    my $composerInstallCommand = "$composerExecutable install";
+
+    system(('bash', '-c', $composerInstallCommand));
+    command_result($?, $!, 'Installing Composer Dependencies...', $composerInstallCommand);
 }
 
 sub cleanup {

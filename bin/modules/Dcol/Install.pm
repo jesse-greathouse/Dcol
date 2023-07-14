@@ -26,6 +26,7 @@ eval "use $osModule qw(
     install_imagick
     install_composer
     install_symlinks
+    install_composer_dependencies
     cleanup
 )";
 1;
@@ -52,5 +53,6 @@ sub install {
     install_imagick($applicationRoot);
     install_composer($applicationRoot);
     install_symlinks($applicationRoot);
+    install_composer_dependencies($applicationRoot);
     cleanup($applicationRoot);
 }

@@ -30,7 +30,10 @@
 get-pip.py
 
 # bin
-/bin/*-e
+bin/*-e
+bin/composer
+bin/composer.phar
+bin/php
 
 # etc
 etc/php/php.ini

@@ -1,5 +1,5 @@
 {
     "require-dev": {
-        "laravel/installer": "~1.1"
+        "laravel/installer": "^4.5"
     }
 }

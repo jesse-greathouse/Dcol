@@ -1,0 +1,62 @@
+# Created by .ignore support plugin (hsz.mobi)
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+#vscode junk
+.history/*
+.vscode/*
+# !.vscode/settings.json
+# !.vscode/tasks.json
+# !.vscode/launch.json
+# !.vscode/extensions.json
+
+# ds stores
+*.DS_Store
+
+# intellij
+*.idea/
+
+# certificates and private keys
+*.crt
+*.key
+
+# build artifacts
+get-pip.py
+
+# bin
+/bin/*-e
+
+# etc
+etc/php/php.ini
+etc/php/hidden.ini
+etc/php-fpm.d/php-fpm.conf
+etc/php-fpm.d/*.default
+
+# opt
+opt/php*/*
+opt/pear*/*
+
+# cache and logs
+error.log
+error.docker.log
+var/*
+
+# tmp
+tmp/*
+
+# vendor
+vendor/
+
+# src
+
+# node
+node_modules/
+
+# misc
+.dcol-cfg.yml

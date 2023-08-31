@@ -5,6 +5,10 @@ namespace App\Exceptions;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
+use App\Exceptions\DocumentDownloadException,
+    App\Exceptions\DocumentDownload403Exception,
+    App\Exceptions\DocumentDownload404Exception;
+
 class Handler extends ExceptionHandler
 {
     /**
@@ -23,6 +27,15 @@ class Handler extends ExceptionHandler
      */
     public function register(): void
     {
+        $this->reportable(function (DocumentDownloadException $e) {
+            return [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ];
+        });
+
         $this->reportable(function (Throwable $e) {
             //
         });

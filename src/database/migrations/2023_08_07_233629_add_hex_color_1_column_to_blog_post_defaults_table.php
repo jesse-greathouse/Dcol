@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('blog_post_defaults', function (Blueprint $table) {
+            $table->string('hex_color_1')->nullable()->default(null);
+            $table->string('hex_color_2')->nullable()->default(null);
+            $table->string('hex_color_3')->nullable()->default(null);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('blog_post_defaults', function (Blueprint $table) {
+            $table->dropColumn('hex_color_1');
+            $table->dropColumn('hex_color_2');
+            $table->dropColumn('hex_color_3');
+        });
+    }
+};

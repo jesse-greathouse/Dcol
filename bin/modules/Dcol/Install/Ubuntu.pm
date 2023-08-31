@@ -49,6 +49,9 @@ my @systemDependencies = (
     'libonig-dev',
     'libsodium-dev',
     'libglib2.0-dev',
+    'libgd-dev',
+    'libfreetype-dev',
+    'libedit-dev',
 );
 
 my @perlModules = (
@@ -111,8 +114,11 @@ sub install_php {
     push @configurePhp, '--enable-bcmath';
     push @configurePhp, '--enable-intl';
     push @configurePhp, '--enable-ftp';
+    push @configurePhp, '--enable-gd';
     push @configurePhp, '--without-sqlite3';
     push @configurePhp, '--without-pdo-sqlite';
+    push @configurePhp, '--with-readline';
+    push @configurePhp, '--with-libedit';
     push @configurePhp, '--with-libxml';
     push @configurePhp, '--with-xsl';
     push @configurePhp, '--with-xmlrpc';
@@ -126,6 +132,8 @@ sub install_php {
     push @configurePhp, '--with-pdo-mysql';
     push @configurePhp, '--with-mysql-sock';
     push @configurePhp, '--with-iconv';
+    push @configurePhp, '--with-jpeg';
+    push @configurePhp, '--with-freetype';
 
     my $originalDir = getcwd();
    

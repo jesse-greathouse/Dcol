@@ -12,7 +12,7 @@ use App\Models\Blog,
     Dcol\Blog\Post\Manager;
 
 
-class MonitorPublication extends Command
+class SyncPublished extends Command
 {
     /**
      * Blog selected for run
@@ -33,14 +33,14 @@ class MonitorPublication extends Command
      *
      * @var string
      */
-    protected $signature = 'dcol:monitorpublication {iterations=0} {--blog=} {--site=}';
+    protected $signature = 'dcol:syncpublished {iterations=0} {--blog=} {--site=}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Queries unpublished Blog Posts to update their publish status.';
+    protected $description = 'Queries published blog posts to synchronize the data.';
 
     /**
      * Execute the console command.
@@ -84,15 +84,8 @@ class MonitorPublication extends Command
                 continue;
             }
 
-            // If the synced blog post is published, save its current status.
-            if ($blogPost->is_published) {
-                $blogPost->save();
-                $this->info("{$blogPost->post_id} status updated.");
-            } else {
-                # Update the timestamps to push it down the order to be processed.
-                $blogPost->touch();
-                $this->info("{$blogPost->post_id} is not yet published.");
-            }
+            $blogPost->save();
+            $this->info("{$blogPost->post_id} status updated.");
 
             $this->unLock($blogPost);
             $this->newLine(2);
@@ -158,7 +151,7 @@ class MonitorPublication extends Command
             $qb = BlogPost::query();
         }
 
-        $qb = $qb->where('blog_posts.is_published', false)
+        $qb = $qb->where('blog_posts.is_published', true)
             ->where('blog_posts.is_locked', false);
 
         return $qb;

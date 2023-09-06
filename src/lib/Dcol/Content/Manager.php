@@ -36,7 +36,7 @@ class Manager extends AbstractManager
 
     const TYPE_META_DESCRIPTION = 'meta_description';
 
-    const PROMPT_TITLE = 'Don\'t use quotes, write a title for the following:';
+    const PROMPT_TITLE = 'Don\'t use quotes, In less than 6 words write a title for the following:';
 
     const PROMPT_BLURB = 'Don\'t use quotes, write a 250 character summary of the following:';
 
@@ -48,7 +48,7 @@ class Manager extends AbstractManager
 
     const PROMPT_TAGS = 'Select terms as keywords that represent the most important parts of the following text, limit the number of terms to a total of 6, only answer in this format keyword 1, keyword 2, keyword 3, keyword 4, keyword 5, keyword 6:';
 
-    const PROMPT_WRITEUP = 'summarize the following, speak in past tense, don\'t create any titles or headings:';
+    const PROMPT_WRITEUP = 'summarize the following, speak in past tense, don\'t use phrases like "in the past", don\'t create any titles or headings:';
 
     const PROMPT_SUMMARY = 'Summarize the following, don\'t create any titles or headings:';
 
@@ -165,12 +165,15 @@ class Manager extends AbstractManager
         $this->setCache($this->content[self::TYPE_SUMMARY], self::TYPE_SUMMARY);
 
         # meta_description
-        $this->content[self::TYPE_META_DESCRIPTION] = $this->filterMetaDescription($this->createContentType($this->content[self::TYPE_BLURB], self::TYPE_META_DESCRIPTION));
+        $this->content[self::TYPE_META_DESCRIPTION] = $this->filterMetaDescription($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_META_DESCRIPTION));
         $this->setCache($this->content[self::TYPE_META_DESCRIPTION], self::TYPE_META_DESCRIPTION);
 
         # focus_keyphrase
-        $this->content[self::TYPE_FOCUS_KEYPHRASE] = $this->filterFocusKeyphrase($this->createContentType($this->content[self::TYPE_META_DESCRIPTION], self::TYPE_FOCUS_KEYPHRASE));
-        $this->setCache($this->content[self::TYPE_FOCUS_KEYPHRASE], self::TYPE_FOCUS_KEYPHRASE);
+        // $this->content[self::TYPE_FOCUS_KEYPHRASE] = $this->filterFocusKeyphrase($this->createContentType($this->content[self::TYPE_META_DESCRIPTION], self::TYPE_FOCUS_KEYPHRASE));
+        // $this->setCache($this->content[self::TYPE_FOCUS_KEYPHRASE], self::TYPE_FOCUS_KEYPHRASE);
+        // For SEO Purposes it seems better simply to use the Post title as the focus keyphrase
+        $this->content[self::TYPE_FOCUS_KEYPHRASE] = strtolower($this->content[self::TYPE_TITLE]);
+
         return $this->content;
     }
 
@@ -526,4 +529,14 @@ class Manager extends AbstractManager
         return $this;
     }
 
+
+    /**
+     * Get list of prompts by content type.
+     *
+     * @return  array
+     */ 
+    public function getPrompts()
+    {
+        return $this->prompts;
+    }
 }

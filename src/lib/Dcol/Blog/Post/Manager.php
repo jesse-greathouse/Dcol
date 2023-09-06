@@ -146,8 +146,18 @@ class Manager extends AbstractManager
             'caption'           => $content->focus_keyphrase,
             'description'       => $content->meta_description,
             'featured_media'    => $blogMediaFeaturedImage->media_id,
-            'categories'        => [$this->getBlogPostDefaults()->category],
+            'categories'        => [ $this->getBlogPostDefaults()->category ],
             'tags'              => $this->getTagList(),
+            'meta_data'         => [
+                                    [ 
+                                        'key'   => '_yoast_wpseo_focuskw', 
+                                        'value' => strtolower($content->title),
+                                    ], 
+                                    [ 
+                                        'key'   => '_yoast_wpseo_metadesc', 
+                                        'value' => $content->meta_description,
+                                    ] 
+                                   ]
         ], $headers);
 
         $response = $this->getPostsApi()->post($request);
@@ -185,6 +195,8 @@ class Manager extends AbstractManager
             'is_published',
             'blog_id',
             'document_id',
+            'focus_keyphrase',
+            'meta_description',
         ];
 
         foreach($props as $prop) {
@@ -290,6 +302,8 @@ class Manager extends AbstractManager
         $data = $response->json();
         $isPublished = ($data['status'] === self::POST_STATUS_PUBLISH) ? true : false;
         $isDraft = ($data['status'] === self::POST_STATUS_DRAFT) ? true : false;
+        $focusKeyphrase = null;
+        $metaDescription = null;
 
         // Figure out url
         if (isset($data['permalink_template'])) {
@@ -311,10 +325,22 @@ class Manager extends AbstractManager
             $content = $data['content']['rendered'];
         }
 
+        // focus_keyword can be enabled from the dcol-wordpress-addon
+        if (isset($data['focus_keyword'])) {
+            $focusKeyphrase = $data['focus_keyword'];
+        }
+
+        // meta_descrption can be enabled from the dcol wordpress addon
+        if (isset($data['meta_description'])) {
+            $metaDescription = $data['meta_description'];
+        }
+
         return new BlogPost([
             'post_id'           => $data['id'],
             'slug'              => $data['slug'],
             'url'               => $url,
+            'focus_keyphrase'   => $focusKeyphrase,
+            'meta_description'  => $metaDescription,
             'author'            => $data['author'],
             'publication_date'  => $data['date'],
             'type'              => $data['type'],

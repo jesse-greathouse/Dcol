@@ -100,14 +100,25 @@ abstract class AbstractManager {
     }
 
     /**
+     * Returns the path to the cache file
+     *
+     * @param string $fileName
+     * @return string
+     */
+    public function getCacheFile(string $fileName): string
+    {
+        return $this->getCacheDir() . '/' . $fileName . '.' . $this->getFileExtension();
+    }
+
+    /**
      * Returns content if content is cached. Returns false if cache doesn't exist.
      *
      * @param string $fileName
      * @return string|false
      */
-    protected function getCache(string $fileName): string|false
+    public function getCache(string $fileName): string|false
     {
-        $file = $this->getCacheDir() . '/' . $fileName . '.' . $this->getFileExtension();
+        $file = $this->getCacheFile($fileName);
         if (file_exists($file)) {
             $content = file_get_contents($file);
             if ($content !== '') {
@@ -123,11 +134,11 @@ abstract class AbstractManager {
      *
      * @param string $content|null
      * @param string $fileName
-     * @return string|false
+     * @return void
      */
-    protected function setCache(string|null $content, string $fileName): void
+    public function setCache(string|null $content, string $fileName): void
     {
-        $file = $this->getCacheDir() . '/' . $fileName . '.' . $this->getFileExtension();
+        $file = $this->getCacheFile($fileName);
         $bytes = file_put_contents($file, $content);
         if (false === $bytes) {
             throw new \Exception("Unable to write cache to \"$file\"");
@@ -140,12 +151,23 @@ abstract class AbstractManager {
      * @param string $fileName
      * @return void
      */
-    protected function removeCache(string $fileName): void
+    public function removeCache(string $fileName): void
     {
         if (false !== $this->getCache($fileName)) {
-            $file = $this->getCacheDir() . '/' . $fileName . '.' . $this->getFileExtension();
+            $file = $this->getCacheFile($fileName);
             unlink($file);
         }
+    }
+
+    /**
+     * Returns the path to the cache file
+     *
+     * @param string $fileName
+     * @return string
+     */
+    public function getTmpFile(string $fileName): string
+    {
+        return $this->getTmpDir() . '/' . $fileName . '.' . $this->getFileExtension();
     }
 
     /**
@@ -154,9 +176,9 @@ abstract class AbstractManager {
      * @param string $fileName
      * @return string|false
      */
-    protected function getTmp(string $fileName): string|false
+    public function getTmp(string $fileName): string|false
     {
-        $file = $this->getTmpDir() . '/' . $fileName . '.' . $this->getFileExtension();
+        $file = $this->getTmpFile($fileName);
         if (file_exists($file)) {
             $content = file_get_contents($file);
             if ($content !== '') {
@@ -175,9 +197,9 @@ abstract class AbstractManager {
      * @param boolean $append
      * @return string|false
      */
-    protected function setTmp(string $content, string $fileName, $append = false): void
+    public function setTmp(string $content, string $fileName, $append = false): void
     {
-        $file = $this->getTmpDir() . '/' . $fileName . '.' . $this->getFileExtension();
+        $file = $this->getTmpFile($fileName);
         $appendFlag = ($append) ? FILE_APPEND : 0;
         $bytes = file_put_contents($file, $content, $appendFlag);
         if (false === $bytes) {
@@ -191,10 +213,10 @@ abstract class AbstractManager {
      * @param string $fileName
      * @return void
      */
-    protected function removeTmp(string $fileName): void
+    public function removeTmp(string $fileName): void
     {
         if (false !== $this->getTmp($fileName)) {
-            $file = $this->getTmpDir() . '/' . $fileName . '.' . $this->getFileExtension();
+            $file = $this->getTmpFile($fileName);
             unlink($file);
         }
     }

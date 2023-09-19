@@ -138,7 +138,7 @@ class Manager extends AbstractManager
         $request = new WordPressRequest([
             'slug'              => $this->makeSlug(),
             'status'            => $status,
-            'title'             => $this->makeShortTitle($content->title),
+            'title'             => $content->title,
             'author'            => $this->getBlogPostDefaults()->author,
             'content'           => $this->makeContent($blogMediaDocument),
             'excerpt'           => $content->meta_description,
@@ -148,16 +148,10 @@ class Manager extends AbstractManager
             'featured_media'    => $blogMediaFeaturedImage->media_id,
             'categories'        => [ $this->getBlogPostDefaults()->category ],
             'tags'              => $this->getTagList(),
-            'meta_data'         => [
-                                    [ 
-                                        'key'   => '_yoast_wpseo_focuskw', 
-                                        'value' => strtolower($content->title),
-                                    ], 
-                                    [ 
-                                        'key'   => '_yoast_wpseo_metadesc', 
-                                        'value' => $content->meta_description,
-                                    ] 
-                                   ]
+            'yoast_meta'        => [
+                'yoast_wpseo_focuskw'   => strtolower($content->title),
+                'yoast_wpseo_metadesc'  => $content->meta_description,
+            ],
         ], $headers);
 
         $response = $this->getPostsApi()->post($request);
@@ -197,6 +191,7 @@ class Manager extends AbstractManager
             'document_id',
             'focus_keyphrase',
             'meta_description',
+            'seo_score',
         ];
 
         foreach($props as $prop) {
@@ -304,6 +299,7 @@ class Manager extends AbstractManager
         $isDraft = ($data['status'] === self::POST_STATUS_DRAFT) ? true : false;
         $focusKeyphrase = null;
         $metaDescription = null;
+        $seoScore = null;
 
         // Figure out url
         if (isset($data['permalink_template'])) {
@@ -335,12 +331,18 @@ class Manager extends AbstractManager
             $metaDescription = $data['meta_description'];
         }
 
+        // seo_score can be enabled from the dcol wordpress addon
+        if (isset($data['seo_score']) && is_numeric($data['seo_score'])) {
+            $seoScore = (int) $data['seo_score'];
+        }
+
         return new BlogPost([
             'post_id'           => $data['id'],
             'slug'              => $data['slug'],
             'url'               => $url,
             'focus_keyphrase'   => $focusKeyphrase,
             'meta_description'  => $metaDescription,
+            'seo_score'         => $seoScore,
             'author'            => $data['author'],
             'publication_date'  => $data['date'],
             'type'              => $data['type'],
@@ -459,26 +461,10 @@ class Manager extends AbstractManager
                 'document_url'      => $blogMediaDocument->source_url,
                 'file_name'         => basename($blogMediaDocument->source_url),
                 'blurb'             => $content->blurb,
-                'focus_keyphrase'   => $content->focus_keyphrase,
+                'focus_keyphrase'   => ucwords($content->focus_keyphrase),
                 'html_writeup'      => $content->html_writeup,
             ]
         );
-    }
-
-    /**
-     * Reduces a Title or any string down to a number of words.
-     *
-     * @param string $title
-     * @param integer $numberOfCharacters
-     * @return string
-     */
-    public function makeShortTitle(string $title, int $numberOfCharacters = 44): string 
-    {
-        $title = wordwrap($title, $numberOfCharacters);
-        $title = trim(substr($title, 0, strpos($title, "\n")));
-        $title = $this->removeSmallLastWords($title);
-
-        return $title;
     }
 
     /**
@@ -592,7 +578,7 @@ class Manager extends AbstractManager
      * @param string $fileName
      * @return string|false
      */
-    protected function getCache(string $fileName): string|false
+    public function getCache(string $fileName): string|false
     {
         return parent::getCache($this->uriToFileName($fileName));
     }
@@ -604,7 +590,7 @@ class Manager extends AbstractManager
      * @param string $fileName
      * @return string|false
      */
-    protected function setCache(string|null $content, string $fileName): void
+    public function setCache(string|null $content, string $fileName): void
     {
         parent::setCache($content, $this->uriToFileName($fileName));
     }
@@ -615,7 +601,7 @@ class Manager extends AbstractManager
      * @param string $fileName
      * @return void
      */
-    protected function removeCache(string $fileName): void
+    public function removeCache(string $fileName): void
     {
         if (false !== $this->getCache($fileName)) {
             $file = $this->getCacheDir() . '/' . $fileName . '.' . $this->getFileExtension();
@@ -631,7 +617,7 @@ class Manager extends AbstractManager
      * @param string $fileName
      * @return string|false
      */
-    protected function getTmp(string $fileName): string|false
+    public function getTmp(string $fileName): string|false
     {
         return parent::getTmp($this->uriToFileName($fileName));
     }
@@ -644,7 +630,7 @@ class Manager extends AbstractManager
      * @param boolean $append
      * @return string|false
      */
-    protected function setTmp(string $content, string $fileName, $append = false): void
+    public function setTmp(string $content, string $fileName, $append = false): void
     {
         parent::setTmp($content, $this->uriToFileName($fileName));
     }
@@ -655,7 +641,7 @@ class Manager extends AbstractManager
      * @param string $fileName
      * @return void
      */
-    protected function removeTmp(string $fileName): void
+    public function removeTmp(string $fileName): void
     {
         parent::removeTmp($this->uriToFileName($fileName));
     }

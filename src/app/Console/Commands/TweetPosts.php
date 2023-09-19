@@ -16,6 +16,8 @@ use App\Exceptions\PostTweetFailedException,
 
 class TweetPosts extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
+
     /**
      * Blog selected for run
      *
@@ -68,15 +70,20 @@ class TweetPosts extends Command
             $blogPost = $this->getBlogPost();
 
             if (null === $blogPost) {
-                $this->line('No blog posts qualified to be tweeted.');
-                $this->newLine(2);
+                if ($this->isVerbose()) {
+                    $this->line('No blog posts qualified to be tweeted.');
+                    $this->newLine(2);
+                }
                 break;
             }
 
             # Lock the BlogPost so it can't be serviced by concurrent jobs.
             $this->lock($blogPost);
-            $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
-            $this->newLine();
+
+            if ($this->isVerbose()) {
+                $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
+                $this->newLine();
+            }
 
             $postManager = new BlogPostManager(
                 $blogPost->blog, $blogPost->document, $this->getVarDir('blog'), $this->getTmpDir('blog'), $blogPost->document->uri
@@ -128,8 +135,10 @@ class TweetPosts extends Command
             $this->unLock($blogPost);
 
             if ($tweetCounter >= $numTweets) {
-                $this->info("Completed sending $numTweets tweets.");
-                $this->newLine();
+                if ($this->isVerbose()) {
+                    $this->info("Completed sending $numTweets tweets.");
+                    $this->newLine();
+                }
                 break;
             }
         }

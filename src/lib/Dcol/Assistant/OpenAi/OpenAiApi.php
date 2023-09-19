@@ -35,6 +35,13 @@ abstract class OpenAiApi {
     protected $model;
 
     /**
+     * A string that describes the persona of the AI Assistant.
+     *
+     * @var string
+     */
+    protected $persona;
+
+    /**
      * Number of attempts to retry in the event of a request failure
      *
      * @var int
@@ -135,6 +142,30 @@ abstract class OpenAiApi {
     public function setModel(string $model): OpenAiApiInterface
     {
         $this->model = $model;
+
+        return $this;
+    }
+
+    /**
+     * Get a string that describes the persona of the AI Assistant.
+     *
+     * @return  string
+     */ 
+    public function getPersona(): string
+    {
+        return $this->persona;
+    }
+
+    /**
+     * Set a string that describes the persona of the AI Assistant.
+     *
+     * @param  string  $persona  A string that describes the persona of the AI Assistant.
+     *
+     * @return  self
+     */ 
+    public function setPersona(string $persona): OpenAiApiInterface
+    {
+        $this->persona = $persona;
 
         return $this;
     }

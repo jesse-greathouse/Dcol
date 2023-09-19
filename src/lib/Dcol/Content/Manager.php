@@ -5,11 +5,14 @@ namespace Dcol\Content;
 use Illuminate\Http\Client\Response;
 
 use Dcol\AbstractManager,
+    Dcol\Assistant\OpenAi\Tokenizer,
     Dcol\Assistant\OpenAi\ChatCompletion,
     Dcol\Assistant\Request\OpenAiRequest;
 
 class Manager extends AbstractManager
 {
+    const MAX_TOKENS_PER_MESSAGE = 4000;
+
     const FILE_EXT='txt';
 
     const TYPE_TITLE = 'title';
@@ -36,7 +39,7 @@ class Manager extends AbstractManager
 
     const TYPE_META_DESCRIPTION = 'meta_description';
 
-    const PROMPT_TITLE = 'Don\'t use quotes, In less than 6 words write a title for the following:';
+    const PROMPT_TITLE = 'Don\'t use quotes, In less than 5 words write a title for the following:';
 
     const PROMPT_BLURB = 'Don\'t use quotes, write a 250 character summary of the following:';
 
@@ -121,47 +124,42 @@ class Manager extends AbstractManager
         # Cache Raw
         $this->setCache($text, self::TYPE_RAW);
 
-        # Truncated text to 2000 characters for use on some of the content type requests
-        $truncatedText = $this->smartTruncate($text, 0, 10000);
-
         # writeup
-        $this->content[self::TYPE_WRITEUP] = $this->createContentTypeMultipart($text, self::TYPE_WRITEUP);
+        $this->content[self::TYPE_WRITEUP] = $this->filterWriteup($this->createContentTypeMultipart($text, self::TYPE_WRITEUP));
         $this->setCache($this->content[self::TYPE_WRITEUP], self::TYPE_WRITEUP);
-        # Truncate writeup for use in other requests
-        $writeup = $this->smartTruncate($this->content[self::TYPE_WRITEUP], 0, 10000);
 
         # html_writeup
         $this->content[self::TYPE_HTML_WRITEUP] = $this->fiterHtml($this->content[self::TYPE_WRITEUP], self::TYPE_HTML_WRITEUP);
         $this->setCache($this->content[self::TYPE_HTML_WRITEUP], self::TYPE_HTML_WRITEUP);
 
         # publication_date
-        $this->content[self::TYPE_PUBLICATION_DATE] = $this->filterPublicationDate($this->createContentType($truncatedText, self::TYPE_PUBLICATION_DATE));
+        $this->content[self::TYPE_PUBLICATION_DATE] = $this->filterPublicationDate($this->createContentType($text, self::TYPE_PUBLICATION_DATE));
         $this->setCache($this->content[self::TYPE_PUBLICATION_DATE], self::TYPE_PUBLICATION_DATE);
 
         # authors
-        $authors = $this->createContentType($truncatedText, self::TYPE_AUTHORS);
+        $authors = $this->createContentType($text, self::TYPE_AUTHORS);
         $this->setCache($authors, self::TYPE_AUTHORS);
         $this->content[self::TYPE_AUTHORS] = $this->filterAuthors(explode(',', $authors));
 
         # title
-        $this->content[self::TYPE_TITLE] = $this->filterTitle($this->createContentType($writeup, self::TYPE_TITLE));
+        $this->content[self::TYPE_TITLE] = $this->filterTitle($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_TITLE));
         $this->setCache($this->content[self::TYPE_TITLE], self::TYPE_TITLE);
 
         # blurb
-        $this->content[self::TYPE_BLURB] = $this->createContentType($writeup, self::TYPE_BLURB);
+        $this->content[self::TYPE_BLURB] = $this->filterUnicode($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_BLURB));
         $this->setCache($this->content[self::TYPE_BLURB], self::TYPE_BLURB);
 
         # tweet
-        $this->content[self::TYPE_TWEET] = $this->filterTweet($this->createContentType($writeup, self::TYPE_TWEET));
+        $this->content[self::TYPE_TWEET] = $this->filterTweet($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_TWEET));
         $this->setCache($this->content[self::TYPE_TWEET], self::TYPE_TWEET);
 
         #tags
-        $tags = $this->createContentType($writeup, self::TYPE_TAGS);
+        $tags = $this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_TAGS);
         $this->setCache($tags, self::TYPE_TAGS);
         $this->content[self::TYPE_TAGS] = $this->filterTags(explode(',', $tags));
 
         # summary
-        $this->content[self::TYPE_SUMMARY] = $this->createContentType($writeup, self::TYPE_SUMMARY);
+        $this->content[self::TYPE_SUMMARY] = $this->filterUnicode($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_SUMMARY));
         $this->setCache($this->content[self::TYPE_SUMMARY], self::TYPE_SUMMARY);
 
         # meta_description
@@ -233,7 +231,10 @@ class Manager extends AbstractManager
             $this->removeTmp($type);
         }
 
-        $response = $this->chat->generate($this->getRequest($text, $this->prompts[$type]));
+        $prompt = $this->prompts[$type];
+        $truncatedText = $this->smartTruncateByTokens($text, $prompt);
+
+        $response = $this->chat->generate($this->getRequest($truncatedText, $prompt));
 
         $content = $this->getContentFromResponse($response);
 
@@ -264,6 +265,58 @@ class Manager extends AbstractManager
     }
 
     /**
+     * Take a content string and Truncate it by the number of tokens.
+     *
+     * @param string $content
+     * @param string $prompt
+     * @param integer|null $numTokens
+     * @return string
+     */
+    protected function smartTruncateByTokens(string $content, string $prompt, int $numTokens = null): string
+    {
+        if (null === $numTokens) {
+            $numTokens = self::MAX_TOKENS_PER_MESSAGE;
+        }
+
+        $promptTokens = $tokens = Tokenizer::encode($prompt);
+        $numPromptTokens = count($promptTokens);
+        $numTokens = $numTokens - $numPromptTokens;
+
+        return $this->truncateByTokens($content, $numTokens);
+    }
+
+    /**
+     * Take a content string and Truncate it by the number of tokens.
+     *
+     * @param string $content
+     * @param integer|null $numTokens
+     * @return string
+     */
+    protected function truncateByTokens(string $content, int $numTokens = null): string
+    {
+        if (null === $numTokens) {
+            $numTokens = self::MAX_TOKENS_PER_MESSAGE;
+        }
+
+        $tokens = Tokenizer::encode($content);
+        $truncated = array_slice($tokens, 0, $numTokens);
+
+        return Tokenizer::decode($truncated);
+    }
+
+    /**
+     * Filter opterations on writeup
+     *
+     * @param string $text
+     * @return string
+     */
+    protected function filterWriteup(string $text): string 
+    {
+        // Clean unicode characters
+        return $this->filterUnicode($text);
+    }
+
+    /**
      * Modify content to be formatted as HTML
      *
      * @param string $text
@@ -277,6 +330,8 @@ class Manager extends AbstractManager
         if (false !== $cache) return $cache;
 
         $this->removeTmp($type);
+
+        $text = $this->filterUnicode($text);
 
         $content = '<p>' . str_replace("\n\n", "</p>\n\n<p>", $text) . '</p>';
 
@@ -308,13 +363,9 @@ class Manager extends AbstractManager
     {
         # Reduce to 155 characters
         $content = substr(trim($this->filterDoubleQuotes($content)), 0, 155);
+        $content = $this->filterUnicode($content);
 
-        # Remove periods
-        $content = str_replace('.', '', $content);
-
-        # If there is no period, truncate at the last space
-        $lastSpace = strrpos($content, ' ');
-        return substr($content, 0, $lastSpace);
+        return $content;
     }
 
     /**
@@ -330,6 +381,8 @@ class Manager extends AbstractManager
 
         # Trim and remove quotes
         $content = trim($this->filterDoubleQuotes($content));
+
+        $content = $this->filterUnicode($content);
 
         # Reduce to only 5 words
         return preg_replace('/((\w+\W*){6}(\w+))(.*)/', '${1}', $content);
@@ -358,6 +411,7 @@ class Manager extends AbstractManager
         $content = str_replace('Title: ', '', $content);
         $content = $this->filterDoubleQuotes($content);
         $content = trim($content);
+        $content = $this->filterUnicode($content);
         return substr($content, 0, 255);
     }
 
@@ -374,6 +428,8 @@ class Manager extends AbstractManager
 
         # Remove non-ascii characters
         $content = preg_replace('/[^\x20-\x7E]/','', $content);
+
+        $content = $this->filterUnicode($content);
 
         # Remove Double Quotes, Trim and truncate to 255 characters
         return substr(trim($this->filterDoubleQuotes($content)), 0, 255);
@@ -410,6 +466,8 @@ class Manager extends AbstractManager
 
         $tag = preg_replace('/keyword \d*\:/i', '', $tag);
 
+        $tag = $this->filterUnicode($tag);
+
         return trim($this->filterDoubleQuotes($tag));
     }
 
@@ -442,6 +500,8 @@ class Manager extends AbstractManager
             $author = substr($author, 0, 100);
         }
 
+        $author = $this->filterUnicode($author);
+
         return trim($this->filterDoubleQuotes($author));
     }
 
@@ -457,6 +517,17 @@ class Manager extends AbstractManager
     }
 
     /**
+     * Converts Unicode strings into utf-8
+     *
+     * @param string $text
+     * @return string
+     */
+    protected function filterUnicode(string $text): string {
+
+        return html_entity_decode(preg_replace("/U\+([0-9A-F]{4})/s", "&#x\\1;", $text), ENT_NOQUOTES, 'UTF-8');
+    }
+
+    /**
      * Produces an OpenAiRequest object based on a prompt and text that the prompt refers to.
      *
      * @param string $text
@@ -467,12 +538,13 @@ class Manager extends AbstractManager
     {
         #sanitize the text
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        $persona = $this->chat->getPersona();
 
         return new OpenAiRequest([
             'messages' => [
                 [
                     'role'      => 'system',
-                    'content'   => 'You are a helpful assistant.'
+                    'content'   => sprintf('You are %s.', $persona)
                 ],
                 [
                     'role'      => 'user',
@@ -495,7 +567,7 @@ class Manager extends AbstractManager
         $data = $response->json();
         if (isset($data['choices']) && isset($data['choices'][0]) && isset($data['choices'][0]['message'])) {
             $finishReason = $data['choices'][0]['finish_reason'];
-            if ('stop' !== $finishReason) {
+            if ('stop' !== $finishReason && 'length' !== $finishReason) {
                 throw new \Exception("Unusual termination from API: $finishReason");
             } else {
                 return $data['choices'][0]['message']['content'];

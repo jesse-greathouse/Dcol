@@ -14,6 +14,8 @@ use App\Models\Blog,
 
 class SyncPublished extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
+
     /**
      * Blog selected for run
      *
@@ -61,15 +63,19 @@ class SyncPublished extends Command
             $blogPost = $this->getBlogPost();
 
             if (null === $blogPost) {
-                $this->line('No blog posts qualified to have status updated.');
-                $this->newLine(2);
+                if ($this->isVerbose()) {
+                    $this->line('No blog posts qualified to have status updated.');
+                    $this->newLine(2);
+                }
                 break;
             }
 
             # Lock the BlogPost so it can't be serviced by concurrent jobs.
             $this->lock($blogPost);
-            $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
-            $this->newLine();
+            if ($this->isVerbose()) {
+                $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
+                $this->newLine();
+            }
 
             $manager = new Manager(
                 $blogPost->blog, $blogPost->document, $this->getVarDir('blog'), $this->getTmpDir('blog'), $blogPost->document->uri
@@ -85,10 +91,14 @@ class SyncPublished extends Command
             }
 
             $blogPost->save();
-            $this->info("{$blogPost->post_id} status updated.");
+
+            if ($this->isVerbose()) {
+                $this->info("{$blogPost->post_id} status updated.");
+                $this->newLine(2);
+            }
 
             $this->unLock($blogPost);
-            $this->newLine(2);
+            
         }
     }
 

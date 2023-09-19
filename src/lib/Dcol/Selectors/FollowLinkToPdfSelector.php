@@ -66,7 +66,12 @@ class FollowLinkToPdfSelector implements SelectorInterface
         if (isset($output[1])) {
             foreach($output[1] as $path) {
                 if ($path === '/' || $path[0] === '#') continue;
-                $uri = $this->getBaseUri() . $path;
+
+                if (false === strpos($path, 'http')) {
+                    $uri = $this->getBaseUri() . $path;
+                } else {
+                    $uri = $path;
+                }
 
                 # Read the page and get the Body of the content.
                 $response = Http::withRequestMiddleware(
@@ -98,14 +103,12 @@ class FollowLinkToPdfSelector implements SelectorInterface
         return array_unique($this->selections);
     }
 
-
-
     /**
      * Get beginning of the Url for the links
      *
      * @return  string
      */ 
-    public function getBaseuri()
+    public function getBaseUri()
     {
         if (null === $this->baseUri) {
             if ($this->pageUrl === null) {

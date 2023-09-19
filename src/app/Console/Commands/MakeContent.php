@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Client\Response;
 
 
@@ -12,6 +13,7 @@ use Dcol\Assistant\OpenAi\ChatCompletion,
     Dcol\Content\Manager;
 
 use App\Models\Author,
+    App\Models\Blog,
     App\Models\Document,
     App\Models\Content,
     App\Models\Tag;
@@ -21,26 +23,16 @@ use App\Models\Author,
  */
 class MakeContent extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
+
+    const PACKET_ORDER_FAULT = 'Packets out of order.';
+
     /**
      * Authorization secret for OpenAI
      *
      * @var string
      */
     protected $authKey;
-
-    /**
-     * The directory which holds temporary files
-     *
-     * @var string
-     */
-    protected $tmpDir;
-
-    /**
-     * The directory which holds the var files
-     *
-     * @var string
-     */
-    protected $varDir;
 
     /**
      * The name and signature of the console command.
@@ -61,14 +53,11 @@ class MakeContent extends Command
      */
     public function handle()
     {
-        # Get Directories for working with the content of this document
-        $varDir = $this->getVarDir();
-        $tmpDir = $this->getTmpDir();
-
         # CLI arguments
         $iterations = (int)$this->argument('iterations');
         $uri = $this->option('uri');
         $regress = $this->option('regress');
+        $model = null;
 
         if (null !== $uri) {
             $iterations = 1;
@@ -80,65 +69,97 @@ class MakeContent extends Command
             $document = $this->getDocument($uri, $regress);
 
             if (null === $document) {
-                $this->line('No Documents qualified to make content.');
-                $this->newLine(2);
+                if ($this->isVerbose()) {
+                    $this->line('No Documents qualified to make content.');
+                    $this->newLine();
+                }
                 break;
             }
 
-            $this->info("Making content for document: \"{$document->uri}\"");
+            if ($this->isVerbose()) {
+                $this->info("Making content for document: \"{$document->uri}\"");
+            }
 
             # Update the timestamps to push it down the order to be processed.
             $document->touch();
 
-            # Instantiate the ChatCompletion Object.
-            $chat = new ChatCompletion($this->getAuthKey());
+            // Create content in the context of a blog.
+            foreach($this->getBlogsForDocument($document) as $blog) {
+                 # Get Directories for working with the content of this document
+                $varDir = $this->getVarDir($blog->domain_name);
+                $tmpDir = $this->getTmpDir($blog->domain_name);
 
-            # Instantiate the content Manager.
-            $manager = new Manager($chat, $varDir, $tmpDir, $document->uri);
+                $aiModel = null;
+                $aiPersona = null;
+                if (null !== $blog->aiModel) {
+                    $aiModel = $blog->aiModel->fine_tuned_model;
+                    $aiPersona = $blog->ai_assistant_persona;
+                }
 
-            # Create the content.
-            try {
-                $content = $manager->createContent($document->decodeRawText());
-            } catch(\Exception $e) {
-                $this->error($e->getMessage());
-                continue;
-            }
+                # Instantiate the ChatCompletion Object.
+                $chat = new ChatCompletion($this->getAuthKey(), $aiModel,);
 
-            # Separate the authors and tags objects from the content.
-            $authors = $content['authors'];
-            unset($content['authors']);
+                # Instantiate the content Manager.
+                $manager = new Manager($chat, $varDir, $tmpDir, $document->uri);
 
-            $tags = $content['tags'];
-            unset($content['tags']);
+                # Create the content.
+                try {
+                    $content = $manager->createContent($document->decodeRawText());
+                } catch(\Exception $e) {
+                    $this->error($e->getMessage());
+                    continue;
+                }
 
-            # Persist the content
-            $c = Content::updateOrCreate(['document_id' => $document->id], $content);
+                # Separate the authors and tags objects from the content.
+                $authors = $content['authors'];
+                unset($content['authors']);
 
-            # Persist the associated authors
-            foreach($authors as $author) {
-                $a = Author::updateOrCreate(
-                    ['name' => $author, 'document_id' => $document->id]
-                );
-            }
-            # Persist the associated tags
-            foreach($tags as $tag) {
-                $t = Tag::updateOrCreate(
-                    ['value' => $tag, 'document_id' => $document->id]
-                );
+                $tags = $content['tags'];
+                unset($content['tags']);
+
+                try {
+                    # Persist the content
+                    $c = Content::updateOrCreate(['document_id' => $document->id], $content);
+                } catch(\Exception $e) {
+                    $message = $e->getMessage();
+                    // Disable documents with content that causes database insert problems.
+                    if (false !== strpos($message, self::PACKET_ORDER_FAULT)) {
+                        $message = "Database Error: " . self::PACKET_ORDER_FAULT;
+                        $document->active = false;
+                        $document->save();
+                    }
+
+                    $this->error("Unable to save content from document: {$document->id} \"{$document->uri}\"");
+                    $this->error($message);
+                    continue;
+                }
+
+                # Persist the associated authors
+                foreach($authors as $author) {
+                    $a = Author::updateOrCreate(
+                        ['name' => $author, 'document_id' => $document->id]
+                    );
+                }
+
+                # Persist the associated tags
+                foreach($tags as $tag) {
+                    $t = Tag::updateOrCreate(
+                        ['value' => $tag, 'document_id' => $document->id]
+                    );
+                }
+
+                unset($chat);
+                unset($manager);
+                unset($content);
+                unset($authors);
+                unset($tags);
+                unset($c);
+                unset($a);
+                unset($t);
             }
 
             # Unset to clear memory.
             unset($document);
-            unset($chat);
-            unset($manager);
-            unset($content);
-            unset($authors);
-            unset($tags);
-            unset($c);
-            unset($a);
-            unset($t);
-
-            $this->newLine(2);
         }
     }
 
@@ -181,6 +202,34 @@ class MakeContent extends Command
     }
 
     /**
+     * Gets a Recordset of all the blogs for a certain document.
+     * 
+     * @param Document $document
+     * @return Collection
+     */
+    private function getBlogsForDocument(Document $document): Collection
+    {
+        $qb =  Blog::join('blog_site', 'blogs.id', '=', 'blog_site.blog_id')
+            ->join('sites', 'sites.id', '=', 'blog_site.site_id')
+            ->join('pages', 'pages.site_id', '=', 'sites.id')
+            ->join('documents', 'documents.page_id', '=', 'pages.id')
+            ->where('documents.id', $document->id);
+            
+        $blogs =  $qb->get([
+            'blogs.id',
+            'blogs.created_at',
+            'blogs.updated_at',
+            'blogs.domain_name',
+            'blogs.username',
+            'blogs.password',
+            'blogs.ai_model_id',
+            'blogs.ai_assistant_persona',
+        ]);
+
+        return Blog::hydrate($blogs->toArray());
+    }
+
+    /**
      * Figures out iterations dynamically if the user didnt provide to the CLI.
      *
      * @param boolean $regress
@@ -207,6 +256,7 @@ class MakeContent extends Command
         return Document::leftJoin('contents', function($join) {
             $join->on('documents.id', '=', 'contents.document_id');
         })
+        ->where('documents.active', true)
         ->whereNull('contents.document_id')
         ->whereNot(function (Builder $query) {
             $query->where('documents.raw_text', '')
@@ -225,49 +275,58 @@ class MakeContent extends Command
         return Document::whereNot(function (Builder $query) {
             $query->where('raw_text', '')
                 ->orWhere('raw_text', null);
-        })->orderBy('updated_at');
+        })
+        ->where('active', true)
+        ->orderBy('updated_at');
     }
 
     /**
      * Returns the value of the system "var" dir
      *
+     * @param  string $blogName
      * @return string
      */
-    private function getVarDir(): string 
+    private function getVarDir(string $blogName): string 
     {
-        if (null === $this->varDir) {
-            $sessSavePath = ini_get('session.save_path');
-            $parts = explode('/', $sessSavePath);
-            # remove the last folder
-            array_pop($parts);
-            $contentsFolder = implode('/', $parts) . '/contents';
-            if (!is_dir($contentsFolder)) {
-                // dir doesn't exist, make it
-                mkdir($contentsFolder);
-            }
-            $this->varDir = $contentsFolder;
-        }
-    
-        return $this->varDir;
+        $sessSavePath = ini_get('session.save_path');
+        $parts = explode('/', $sessSavePath);
+        array_pop($parts);
+        return $this->getContentDir(implode('/', $parts), $blogName);
     }
 
     /**
      * Get the directory which holds temporary files
-     *
+     * 
+     * @param   string $blogName
      * @return  string
      */ 
-    public function getTmpDir(): string
+    public function getTmpDir(string $blogName): string
     {
-        if (null === $this->tmpDir) {
-            $contentsFolder = sys_get_temp_dir() . '/contents';
-            if (!is_dir($contentsFolder)) {
-                // dir doesn't exist, make it
-                mkdir($contentsFolder);
-            }
-            $this->tmpDir = $contentsFolder;
+        return $this->getContentDir(sys_get_temp_dir(), $blogName);
+    }
+
+    /**
+     * Get the directory which holds the files
+     * 
+     * @param   string $baseDir
+     * @param   string $contentDir
+     * @return  string
+     */ 
+    private function getContentDir(string $baseDir, string $contentDir): string
+    {
+        $contentsFolder = "$baseDir/contents";
+        if (!is_dir($contentsFolder)) {
+            // dir doesn't exist, make it
+            mkdir($contentsFolder);
         }
 
-        return $this->tmpDir;
+        $blogContentFolder = "$contentsFolder/$contentDir";
+        if (!is_dir($blogContentFolder)) {
+            // dir doesn't exist, make it
+            mkdir($blogContentFolder);
+        }
+
+        return $blogContentFolder;
     }
 
     /**

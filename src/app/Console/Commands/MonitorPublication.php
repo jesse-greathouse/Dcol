@@ -14,6 +14,8 @@ use App\Models\Blog,
 
 class MonitorPublication extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
+
     /**
      * Blog selected for run
      *
@@ -61,15 +63,19 @@ class MonitorPublication extends Command
             $blogPost = $this->getBlogPost();
 
             if (null === $blogPost) {
-                $this->line('No blog posts qualified to have status updated.');
-                $this->newLine(2);
+                if ($this->isVerbose()) {
+                    $this->line('No blog posts qualified to have status updated.');
+                    $this->newLine(2);
+                }
                 break;
             }
 
             # Lock the BlogPost so it can't be serviced by concurrent jobs.
             $this->lock($blogPost);
-            $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
-            $this->newLine();
+            if ($this->isVerbose()) {
+                $this->info("Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
+                $this->newLine();
+            }
 
             $manager = new Manager(
                 $blogPost->blog, $blogPost->document, $this->getVarDir('blog'), $this->getTmpDir('blog'), $blogPost->document->uri
@@ -87,15 +93,18 @@ class MonitorPublication extends Command
             // If the synced blog post is published, save its current status.
             if ($blogPost->is_published) {
                 $blogPost->save();
-                $this->info("{$blogPost->post_id} status updated.");
+                $this->info("{$blogPost->post_id} \"{$blogPost->slug}\" status updated.");
+                $this->newLine(2);
             } else {
                 # Update the timestamps to push it down the order to be processed.
                 $blogPost->touch();
-                $this->info("{$blogPost->post_id} is not yet published.");
+                if ($this->isVerbose()) {
+                    $this->info("{$blogPost->post_id} is not yet published.");
+                    $this->newLine(2);
+                }
             }
 
             $this->unLock($blogPost);
-            $this->newLine(2);
         }
     }
 

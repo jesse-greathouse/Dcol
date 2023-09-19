@@ -30,11 +30,13 @@ class OpenAiRequest implements AssistantRequestInterface
         }
 
         if (null !== $headers) {
-            $this->setHeader($headers);
+            $this->setHeaders($headers);
         }
 
-        # Force the Content-Type header to be "<application/json>" 
-        $this->headers['Content-Type'] = "application/json";
+        # Force the Content-Type header to be "<application/json>" If it isn't already set
+        if (!isset($this->headers['Content-Type'])) {
+            $this->headers['Content-Type'] = "application/json";
+        }
     }
 
     /**
@@ -80,6 +82,94 @@ class OpenAiRequest implements AssistantRequestInterface
     public function hasModel(): bool
     {
         return (isset($this->body['model']));
+    }
+
+    /**
+     * Returns true/false if the request has specified a file
+     *
+     * @return boolean
+     */
+    public function hasFile(): bool
+    {
+        return (isset($this->body['file']));
+    }
+
+    /**
+     * Sets the file for the request
+     *
+     * @param $file
+     * @return OpenAiRequest
+     */
+    public function file($file): OpenAiRequest 
+    {
+        $this->body['file'] = $file;
+        return $this;
+    }
+
+    /**
+     * Returns true/false if the request has specified a fileId
+     *
+     * @return boolean
+     */
+    public function hasFileId(): bool
+    {
+        return (isset($this->body['training_file']));
+    }
+
+    /**
+     * Sets the fileId for the request
+     *
+     * @param string $fileId
+     * @return OpenAiRequest
+     */
+    public function fileId(string $fileId): OpenAiRequest 
+    {
+        $this->body['training_file'] = $fileId;
+        return $this;
+    }
+
+    /**
+     * Returns true/false if the request has specified a suffix
+     *
+     * @return boolean
+     */
+    public function hasSuffix(): bool
+    {
+        return (isset($this->body['suffix']));
+    }
+
+    /**
+     * Sets the suffix for the request
+     *
+     * @param string $suffix
+     * @return OpenAiRequest
+     */
+    public function suffix(string $suffix): OpenAiRequest 
+    {
+        $this->body['suffix'] = $suffix;
+        return $this;
+    }
+
+    /**
+     * Returns true/false if the request has specified a purpose
+     *
+     * @return boolean
+     */
+    public function hasPurpose(): bool
+    {
+        return (isset($this->body['purpose']));
+    }
+
+    /**
+     * Sets the purpose for the request
+     *
+     * @param string $purpose
+     * @return OpenAiRequest
+     */
+    public function purpose(string $purpose): OpenAiRequest 
+    {
+        $this->body['purpose'] = $purpose;
+        return $this;
     }
 
     public function addMessage(string $content, string $role = 'user'): OpenAiRequest 

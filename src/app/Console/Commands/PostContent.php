@@ -19,6 +19,8 @@ use Dcol\Blog\Post\Manager as BlogPostManager,
 
 class PostContent extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
+
     /**
      * Blog selected for run
      *
@@ -66,8 +68,10 @@ class PostContent extends Command
             $errors = [];
 
             if (null === $document) {
-                $this->line('No document qualified to be posted.');
-                $this->newLine(2);
+                if ($this->isVerbose()) {
+                    $this->line('No document qualified to be posted.');
+                    $this->newLine(2);
+                }
                 break;
             }
 
@@ -77,12 +81,16 @@ class PostContent extends Command
                 ['is_locked' => true]
             );
 
-            $this->info("Document: \"{$document->uri}\"");
-            $this->newLine();
+            if ($this->isVerbose()) {
+                $this->info("Document: \"{$document->uri}\"");
+                $this->newLine();
+            }
 
             foreach($this->getBlogsForDocument($document) as $blog) {
-                $this->info("Posting content to: \"{$blog->domain_name}\"");
-                $this->newLine();
+                if ($this->isVerbose()) {
+                    $this->info("Posting content to: \"{$blog->domain_name}\"");
+                    $this->newLine();
+                }
 
                 $postManager = new BlogPostManager(
                     $blog, $document, $this->getVarDir('blog'), $this->getTmpDir('blog'), $document->uri
@@ -103,8 +111,10 @@ class PostContent extends Command
                         # Upload the document to the blog.
                         $blogMediaDocument = $postManager->uploadDocument();
                         $blogMediaDocument->save();
-                        $this->info("Uploaded document {$blogMediaDocument->media_id}: \"{$blogMediaDocument->slug}\"");
-                        $this->newLine();
+                        if ($this->isVerbose()) {
+                            $this->info("Uploaded document {$blogMediaDocument->media_id}: \"{$blogMediaDocument->slug}\"");
+                            $this->newLine();
+                        }
                     }
                 } catch(\Exception $e) {
                     $errors[] = $e;
@@ -121,20 +131,26 @@ class PostContent extends Command
                     if (null === $blogMediaFeaturedImage) {
                         # Download the default image template for the Blog+Site
                         $backgroundImage = $postManager->downloadDefaultFeaturedMediaImage();
-                        $this->info("Downloaded Default image for background:");
-                        $this->line($backgroundImage);
+                        if ($this->isVerbose()) {
+                            $this->info("Downloaded Default image for background:");
+                            $this->line($backgroundImage);
+                        }
 
                         # Create the featured Image for the Blog Post.
                         $featuredImage = $imageManager->createFeaturedimage($backgroundImage);
-                        $this->info("Composed featured image:");
-                        $this->line($featuredImage);
+                        if ($this->isVerbose()) {
+                            $this->info("Composed featured image:");
+                            $this->line($featuredImage);
+                        }
 
                         # Upload the featured image
                         $blogMediaFeaturedImage = $postManager->uploadFile($featuredImage);
                         $blogMediaFeaturedImage->is_featured_image = true;
                         $blogMediaFeaturedImage->save();
-                        $this->info("Uploaded image {$blogMediaFeaturedImage->media_id}: \"{$blogMediaFeaturedImage->slug}\"");
-                        $this->newLine();
+                        if ($this->isVerbose()) {
+                            $this->info("Uploaded image {$blogMediaFeaturedImage->media_id}: \"{$blogMediaFeaturedImage->slug}\"");
+                            $this->newLine();
+                        }
                     }
                 } catch(\Exception $e) {
                     $errors[] = $e;
@@ -150,8 +166,10 @@ class PostContent extends Command
                     if (null === $blogPost) {
                         $blogPost = $postManager->makePost($blogMediaDocument, $blogMediaFeaturedImage);
                         $blogPost->save();
-                        $this->info("Created Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
-                        $this->newLine();
+                        if ($this->isVerbose()) {
+                            $this->info("Created Blog Post {$blogPost->post_id}: \"{$blogPost->slug}\"");
+                            $this->newLine();
+                        }
                     }
 
                     # Save the association between the new blog post and its media.
@@ -204,7 +222,8 @@ class PostContent extends Command
             'documents.uri',
             'documents.raw_text',
             'documents.type_id',
-            'documents.page_id'
+            'documents.page_id',
+            'documents.active',
         ]);
     }
 
@@ -239,6 +258,7 @@ class PostContent extends Command
          * from `documents` 
          * inner join `pages` on `pages`.`id` = `documents`.`page_id` 
          * inner join `sites` on `sites`.`id` = `pages`.`site_id` 
+         * inner join `contents` on `contents`.`document_id` = `documents`.`id` 
          * inner join `blog_site` on `sites`.`id` = `blog_site`.`site_id` 
          * inner join `blogs` on `blogs`.`id` = `blog_site`.`blog_id` 
          * left join `blog_posts` on `documents`.`id` = `blog_posts`.`document_id` 
@@ -249,7 +269,8 @@ class PostContent extends Command
         */
 
         $qb = Document::join('pages', 'pages.id', '=', 'documents.page_id')
-            ->join('sites', 'sites.id', '=', 'pages.site_id');
+            ->join('sites', 'sites.id', '=', 'pages.site_id')
+            ->join('contents', 'contents.document_id', '=', 'documents.id');
 
         if (null !== $blog) {
             $qb = $qb->join('blog_site', 'sites.id', '=', 'blog_site.site_id')

@@ -161,9 +161,8 @@ abstract class Api {
                 $response->throw();
             } catch (\Exception $e) {
                 $additionalMessaging = 'url: ' . $url  . "\n\n";
-                #$additionalMessaging .= 'response body: ' .  print_r($response->json(), true) . "\n\n";
                 $additionalMessaging .= 'request headers: ' . print_r($headers, true) . "\n\n";
-                $additionalMessaging .= 'request body: ' . print_r($body, $true) . "\n\n";
+                $additionalMessaging .= 'request body: ' . print_r($body, true) . "\n\n";
                 $attempts++;
                 sleep(1);
                 continue;

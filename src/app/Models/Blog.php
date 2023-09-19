@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
 
-use App\Models\BlogAuth;
+use App\Models\BlogAuth,
+    App\Models\AiModel;
 
 class Blog extends Model
 {
@@ -32,6 +33,16 @@ class Blog extends Model
     public function blogAuth(): BelongsTo
     {
         return $this->belongsTo(BlogAuth::class, 'id');
+    }
+
+    /**
+     * Get The Ai Model To use if one exists.
+     *
+     * @return BelongsTo
+     */
+    public function aiModel(): BelongsTo
+    {
+        return $this->belongsTo(AiModel::class, 'ai_model_id');
     }
 
     /**

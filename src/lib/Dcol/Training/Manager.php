@@ -6,39 +6,39 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Database\Eloquent\Collection;
 
 use Dcol\AbstractManager,
-    Dcol\Content\Manager as ContentManager;
+    Dcol\Content\Manager as ContentManager,
+    Dcol\Assistant\OpenAi\ChatCompletion,
+    Dcol\Assistant\Request\OpenAiRequest;
 
-use App\Models\BlogPost,
+use App\Models\Blog,
+    App\Models\BlogPost,
     App\Models\Content;
 
 class Manager extends AbstractManager
 {
-    
+    const FILE_EXT='jsonl';
+
+    /**
+     * Blog record.
+     *
+     * @var Blog
+     */
+    protected $blog;
+
     /**
      * Constructor.
      *
-     * @param ChatCompletion $chat
+     * @param Blog $blog
      * @param string $cacheDir
      * @param string $tmpDir
      * @param string $uri
      */
-    public function __construct(ChatCompletion $chat, string $baseCacheDir, string $baseTmpDir)
+    public function __construct(Blog $blog, string $baseCacheDir, string $baseTmpDir)
     {
-        $this->setChat($chat);
-        $this->setUri($uri);
+        $this->setBlog($blog);
         $this->setCacheDir($baseCacheDir);
         $this->setTmpDir($baseTmpDir);
         $this->setFileExtension(Manager::FILE_EXT);
-    }
-
-    public function makeTrainingLines(Collection $blogPosts)
-    {
-        $lines = [];
-    }
-
-    protected function makeLine(string $system, string $user, string $assistant, string $contentType)
-    {
-
     }
 
     public function createTrainingFile(array $lines, string $suffix ) 
@@ -46,54 +46,121 @@ class Manager extends AbstractManager
         $job = '';
 
         foreach($lines as $line) {
-            ['system' => $system, 'user' => $user, 'assistant' => $assistant] = $line;
+            ['type' => $type, 'system' => $system, 'user' => $user, 'assistant' => $assistant] = $line;
 
             $row = [
                 'messages' => [
-                    'role'      => 'system',
-                    'content'   => $system,
-                ],
-                [
-                    'role'      => 'user',
-                    'content'   => $user,
-                ],
-                [
-                    'role'      => 'assistant',
-                    'content'   => $assistant,
-                ],
+                    [
+                        'role'      => 'system',
+                        'content'   => "You are $system",
+                    ],
+                    [
+                        'role'      => 'user',
+                        'content'   => $user,
+                    ],
+                    [
+                        'role'      => 'assistant',
+                        'content'   => $assistant,
+                    ],
+                ]
             ];
 
-            $job .= json_encode($row) . "\n";
-
+            try {
+                $txt = json_encode($row, JSON_THROW_ON_ERROR);
+                $job .= "$txt\n";
+            } catch (\Exception $e) {
+                // don't do anything.
+            }
         }
 
-        var_dump($job); die();
+        $job = rtrim($job);
 
-        $this->setCache($job, "$suffix.jsonl");
+        $this->setCache($job, $suffix);
     }
 
     /**
-     * Get openAI chatcompletion implementation.
+     * Get blog record.
      *
-     * @return  ChatCompletion
+     * @return  Blog
      */ 
-    public function getChat(): ChatCompletion
+    public function getBlog()
     {
-        return $this->chat;
+        return $this->blog;
     }
 
     /**
-     * Set openAI chatcompletion implementation.
+     * Set blog record.
      *
-     * @param  ChatCompletion  $chat  OpenAI chatcompletion implementation.
+     * @param  Blog  $blog  Blog record.
      *
      * @return  self
      */ 
-    public function setChat(ChatCompletion $chat): Manager
+    public function setBlog(Blog $blog)
     {
-        $this->chat = $chat;
+        $this->blog = $blog;
 
         return $this;
     }
 
+    /**
+     * Set directory for holding cached files.
+     *
+     * @param  string  $cacheDir  Directory for holding cached files.
+     *
+     * @return  self
+     */ 
+    public function setCacheDir(string $cacheDir): AbstractManager
+    {
+        $blog = $this->getBlog();
+        $dir = $cacheDir .  '/' . $blog->domain_name;
+        if (!is_dir($dir)) {
+            $this->buildTrainingDir($cacheDir, $uri);
+        }
+
+        $this->cacheDir = $dir;
+
+        return $this;
+    }
+
+    /**
+     * Set directory for holding temporary files.
+     *
+     * @param  string  $tmpDir  Directory for holding temporary files.
+     *
+     * @return  self
+     */ 
+    public function setTmpDir(string $tmpDir): AbstractManager
+    {
+        $blog = $this->getBlog();
+        $dir = $cacheDir .  '/' . $blog->domain_name;
+        if (!is_dir($dir)) {
+            $this->buildTrainingDir($tmpDir, $uri);
+        }
+
+        $this->tmpDir = $dir;
+
+        return $this;
+    }
+
+    /**
+     * Builds a directory from a specified path
+     *
+     * @param string $baseDir
+     * @param string $uri
+     * @return void
+     */
+    protected function buildTrainingDir(string $baseDir, string $uri): void
+    {
+        $parts = explode('/', $uri);
+        
+        # Create the Directory Structure if it doesn't currently exist.
+        $buildDir = $baseDir;
+        foreach($parts as $dir) {
+            $buildDir .= '/' . $dir;
+            if (!is_dir($buildDir)) {
+                // dir doesn't exist, make it
+                mkdir($buildDir);
+            }
+        }
+    }
 }

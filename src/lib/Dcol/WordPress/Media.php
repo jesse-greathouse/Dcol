@@ -10,7 +10,7 @@ use Dcol\WordPress\Auth\WordPressAuthInterface,
 
 class Media extends Api implements ApiInterface
 {
-    const DEFAULT_RESPONSE_TIMEOUT = 30;
+    const DEFAULT_RESPONSE_TIMEOUT = 120;
 
     const DEFAULT_RETRY_ATTEMPTS = 1;
 

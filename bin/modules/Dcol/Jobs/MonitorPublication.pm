@@ -56,15 +56,12 @@ sub command_result {
     my ($exit, $err, $operation_str, @cmd) = @_;
 
     if ($exit == -1) {
-        print "failed to execute: $err \n";
+        print "$operation_str failed to execute: $err \n";
         exit $exit;
     }
     elsif ($exit & 127) {
-        printf "child died with signal %d, %s coredump\n",
+        printf "$operation_str child died with signal %d, %s coredump\n",
             ($exit & 127),  ($exit & 128) ? 'with' : 'without';
         exit $exit;
-    }
-    else {
-        printf "$operation_str exited with value %d\n", $exit >> 8;
     }
 }

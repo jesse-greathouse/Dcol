@@ -1,11 +1,13 @@
 #!/usr/bin/perl
 
-package Dcol::Jobs::Crawl;
+package Dcol::Jobs::SyncTrainingFiles;
+
 use strict;
 use Cwd qw(getcwd abs_path);
 use File::Basename;
+use Getopt::Long;
 use Exporter 'import';
-our @EXPORT_OK = qw(crawl);
+our @EXPORT_OK = qw(sync_training_files);
 
 my $bin = abs_path(dirname(__FILE__) . '/../../../');
 my $applicationRoot = abs_path(dirname($bin));
@@ -18,19 +20,16 @@ my $src = $applicationRoot . '/src';
 # ====================================
 
 # Controls the PHP artisan CLI to run jobs based on laravel commands.
-sub crawl {
-    my ($iterations) = @ARGV;
+sub sync_training_files {
     local $ENV{PATH} = "$bin:$ENV{PATH}";
     chdir $src;
     
-    my @crawlCmd = ('php');
-    push @crawlCmd, 'artisan';
-    push @crawlCmd, 'dcol:crawl';
-    if (defined $iterations) {
-        push @crawlCmd, $iterations;
-    }
-    system(@crawlCmd);
-    command_result($?, $!, "Dcol crawl command issued...", \@crawlCmd);
+    my @postCmd = ('php');
+    push @postCmd, 'artisan';
+    push @postCmd, 'dcol:trainingfile:sync';
+
+    system(@postCmd);
+    command_result($?, $!, "Dcol trainingfile sync command issued...", \@postCmd);
 }
 
 sub command_result {

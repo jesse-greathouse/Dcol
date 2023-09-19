@@ -25,6 +25,7 @@ use Dcol\Parsers\PdfParser;
  */
 class Crawl extends Command
 {
+    use OutputCheck, PrependsOutput, PrependsTimestamp;
 
     /**
      * The directory which holds temporary files
@@ -71,7 +72,9 @@ class Crawl extends Command
         $qb = $this->getQb($this->argument('iterations'));
 
         foreach ($qb->get() as $page) {
-            $this->info("Crawling page: \"{$page->url}\"");
+            if ($this->isVerbose()) {
+                $this->info("Crawling page: \"{$page->url}\"");
+            }
 
             # Update the currently cralwed page so it won't be crawled first on the next run.
             $page->updated_at = new \DateTime();
@@ -87,10 +90,8 @@ class Crawl extends Command
             $body = $response->body();
 
             foreach($page->selectors as $selector) {
-                $this->newLine(1);
                 $s = new $selector->class;
                 foreach($s->select([$body], $page->url)->getSelections() as $selection) {
-                    $this->newLine(2);
                     $downloadUrl = $this->urlFilter($selection, $page);
                     $fileUri = $this->getUriFromUrl($downloadUrl);
                     $baseName = basename($fileUri);
@@ -99,14 +100,16 @@ class Crawl extends Command
                     # Download the file if it does not currently exist in the file system.
                     $downloadedFile = $this->getVarDir() . '/' . $fileUri;
                     if (file_exists($downloadedFile)) {
-                        $this->line("$baseName already exists... skipping download");
+                        if ($this->isVerbose()) {
+                            $this->newLine();
+                            $this->line("$baseName already exists... skipping download");
+                        }
                     } else {
                         try {
                             $downloadedFile = $this->downloadFile($downloadUrl);
                         } catch(DocumentDownloadException $e) {
                             $reflect = new \ReflectionClass($e);
-                            $this->newLine();
-                            $this->error($reflect->getShortName());
+                            $this->error($reflect->getShortName() . ' : ' . $downloadUrl);
                             continue;
                         }
                     }
@@ -126,7 +129,12 @@ class Crawl extends Command
                                 'page_id'   => $page->id,
                             ]);
                         } catch(\Exception $e) {
-                            $this->error($e);
+                            $msg = $e->getMessage();
+                            // Check to see if it's a secured pdf exception.
+                            // We don't currently have the ability to parse a secured pdf.
+                            if (false === strpos($msg, 'Secured pdf file are currently not supported')) {
+                                $this->error($msg);
+                            }
                         } catch(\TypeError $e ) {
                             $this->error($e);
                         }
@@ -250,7 +258,9 @@ class Crawl extends Command
         $tmpPath = $this->tmpFilePathFilter($url);
         $varPath = NULL;
 
-        $this->line("Downloading file from: $url");
+        if ($this->isVerbose()) {
+            $this->line("Downloading file from: $url");
+        }
 
         try {
             # Download to tmp Folder

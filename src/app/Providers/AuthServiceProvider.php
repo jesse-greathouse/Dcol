@@ -23,6 +23,10 @@ class AuthServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        # Blog
         Gate::define('view-blog', [BlogPolicy::class, 'view']);
+        Gate::define('create-blog', [BlogPolicy::class, 'create']);
+        Gate::define('update-blog', [BlogPolicy::class, 'update']);
+        Gate::define('delete-blog', [BlogPolicy::class, 'delete']);
     }
 }

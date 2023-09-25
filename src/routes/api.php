@@ -20,8 +20,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+# Blog
 Route::middleware('auth:sanctum')->get('/blog', [BlogController::class, 'index']);
-
 Route::middleware('auth:sanctum')->get('/blog/domain/{domainName}', [BlogController::class, 'domainName']);
-
 Route::middleware('auth:sanctum')->get('/blog/{id}', [BlogController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/blog', [BlogController::class, 'store']);
+Route::middleware('auth:sanctum')->put('/blog/{id}', [BlogController::class, 'update']);
+Route::middleware('auth:sanctum')->delete('/blog/{id}', [BlogController::class, 'delete']);

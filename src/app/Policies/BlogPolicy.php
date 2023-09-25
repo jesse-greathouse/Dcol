@@ -27,9 +27,9 @@ class BlogPolicy
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user, Blog $blog): bool
+    public function create(User $user): bool
     {
-        return $this->can('create', $user, $blog);
+        return $user->tokenCan('create');
     }
 
     /**

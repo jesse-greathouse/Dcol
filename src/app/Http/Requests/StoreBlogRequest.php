@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
+use App\Models\Blog;
+
 class StoreBlogRequest extends FormRequest
 {
     /**
@@ -11,7 +13,7 @@ class StoreBlogRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -22,7 +24,9 @@ class StoreBlogRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'domain_name'   => 'required|unique:blogs|max:255',
+            'blog_auth_id'  => 'required',
+            'user_id'       => 'required',
         ];
     }
 }

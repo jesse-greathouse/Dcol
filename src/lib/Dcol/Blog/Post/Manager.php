@@ -461,6 +461,7 @@ class Manager extends AbstractManager
                 'document_url'      => $blogMediaDocument->source_url,
                 'file_name'         => basename($blogMediaDocument->source_url),
                 'blurb'             => $content->blurb,
+                'title'             => $content->title,
                 'focus_keyphrase'   => ucwords($content->focus_keyphrase),
                 'html_writeup'      => $content->html_writeup,
             ]

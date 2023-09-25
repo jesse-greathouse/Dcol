@@ -97,14 +97,15 @@ class MakeContent extends Command
                 }
 
                 # Instantiate the ChatCompletion Object.
-                $chat = new ChatCompletion($this->getAuthKey(), $aiModel,);
+                $chat = new ChatCompletion($this->getAuthKey(), $aiModel, $aiPersona);
 
                 # Instantiate the content Manager.
                 $manager = new Manager($chat, $varDir, $tmpDir, $document->uri);
 
                 # Create the content.
                 try {
-                    $content = $manager->createContent($document->decodeRawText());
+                    $raw = $document->decodeRawText();
+                    $content = $manager->createContent($raw);
                 } catch(\Exception $e) {
                     $this->error($e->getMessage());
                     continue;

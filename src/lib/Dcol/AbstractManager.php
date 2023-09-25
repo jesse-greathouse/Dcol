@@ -36,48 +36,6 @@ abstract class AbstractManager {
     protected $fileExtension='';
 
     /**
-     * Takes the partially collected content and subtracts part of the array to resume collecting.
-     *
-     * @param array $paragraphs
-     * @param string $content
-     * @return array
-     */
-    protected function resumeContentMultipart(array $paragraphs, string $content): array {
-        # Number of paragraphs in content
-        $contentParagraphs = $this->getParagraphs($content);
-
-        # Number of missing paragraphs in content
-        $diff = count($paragraphs) - count($contentParagraphs);
-
-        # Convert the difference into an array position
-        $offset = $diff - 1;
-
-        return array_slice($paragraphs, $offset);
-    }
-
-    /**
-     * Chunk the content into paragraphs to make things manageable.
-     *
-     * @param string $content
-     * @return array
-     */
-    protected function getParagraphs(string $content): array
-    {
-        $pattern = "/(?s)((?:[^\n][\n]?)+)/im";
-        $matches = [];
-
-        preg_match_all($pattern, $content, $matches);
-
-        if (!isset($matches[0])) {
-            throw new \Exception("Unable to break content into paragraphs");
-        } else {
-            $paragraphs = $matches[0];
-        }
-
-        return $paragraphs;
-    }
-
-    /**
      * Builds a directory from a specified path
      *
      * @param string $baseDir
@@ -120,7 +78,7 @@ abstract class AbstractManager {
     {
         $file = $this->getCacheFile($fileName);
         if (file_exists($file)) {
-            $content = file_get_contents($file);
+            $content = $this->readFile($file);
             if ($content !== '') {
                 return $content;
             }
@@ -138,10 +96,13 @@ abstract class AbstractManager {
      */
     public function setCache(string|null $content, string $fileName): void
     {
+        if (null === $content) return;
+
         $file = $this->getCacheFile($fileName);
-        $bytes = file_put_contents($file, $content);
-        if (false === $bytes) {
-            throw new \Exception("Unable to write cache to \"$file\"");
+        try {
+            $this->writeFile($content, $file);
+        } catch(\Exception $e) {
+            throw new \Exception("Unable to write to cahce file: \"$file\": " . $e->getMessage());
         }
     }
 
@@ -180,7 +141,7 @@ abstract class AbstractManager {
     {
         $file = $this->getTmpFile($fileName);
         if (file_exists($file)) {
-            $content = file_get_contents($file);
+            $content = $this->readFile($file);
             if ($content !== '') {
                 return $content;
             }
@@ -197,13 +158,15 @@ abstract class AbstractManager {
      * @param boolean $append
      * @return string|false
      */
-    public function setTmp(string $content, string $fileName, $append = false): void
+    public function setTmp(string $content, string $fileName, bool $append = false): void
     {
+        if (null === $content) return;
+
         $file = $this->getTmpFile($fileName);
-        $appendFlag = ($append) ? FILE_APPEND : 0;
-        $bytes = file_put_contents($file, $content, $appendFlag);
-        if (false === $bytes) {
-            throw new \Exception("Unable to write to temporary file \"$file\"");
+        try {
+            $this->writeFile($content, $file, $append);
+        } catch(\Exception $e) {
+            throw new \Exception("Unable to write to temporary file: \"$file\": " . $e->getMessage());
         }
     }
 
@@ -397,5 +360,35 @@ abstract class AbstractManager {
         $this->fileExtension = $fileExtension;
 
         return $this;
+    }
+
+    /**
+     * Write to a file
+     *
+     * @param string $text
+     * @param string $file
+     * @param boolean $append
+     * @return void
+     */
+    protected function writeFile(string $text, string $file, bool $append = false): void 
+    {
+        $mode = $append ? 'a' : 'w';
+        $fp = fopen($file, $mode);
+        fwrite($fp, $text);
+        fclose($fp);
+    }
+
+    /**
+     * Read to a File
+     *
+     * @param string $file
+     * @return string
+     */
+    protected function readFile(string $file): string 
+    {
+        $fp = fopen($file, 'r');
+        $text = fread($fp, filesize($file));
+        fclose($fp);
+        return $text;
     }
 }

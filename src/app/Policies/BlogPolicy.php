@@ -21,15 +21,15 @@ class BlogPolicy
      */
     public function view(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('read', $user, $blog);
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('create', $user, $blog);
     }
 
     /**
@@ -37,7 +37,7 @@ class BlogPolicy
      */
     public function update(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('update', $user, $blog);
     }
 
     /**
@@ -45,7 +45,7 @@ class BlogPolicy
      */
     public function delete(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('delete', $user, $blog);
     }
 
     /**
@@ -53,7 +53,7 @@ class BlogPolicy
      */
     public function restore(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('create', $user, $blog);
     }
 
     /**
@@ -61,6 +61,19 @@ class BlogPolicy
      */
     public function forceDelete(User $user, Blog $blog): bool
     {
-        //
+        return $this->can('delete', $user, $blog);
+    }
+
+    /**
+     * The basic standard for all of these methods.
+     *
+     * @param string $action
+     * @param User $user
+     * @param Blog $blog
+     * @return boolean
+     */
+    protected function can(string $action, User $user, Blog $blog): bool
+    {
+        return $user->id === $blog->user_id && $user->tokenCan($action);
     }
 }

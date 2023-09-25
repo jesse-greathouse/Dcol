@@ -1,6 +1,6 @@
 <div    class="cta-banner {{ $class_1 }}" >
 
-    <p  class="cta" >Download the document</p>
+    <h3  class="cta" >Download the document about {{ $title }}</h3>
 
     <a  class="download-link" 
         href="{{ $document_url }}" 

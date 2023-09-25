@@ -11,7 +11,7 @@ use Dcol\AbstractManager,
 
 class Manager extends AbstractManager
 {
-    const MAX_TOKENS_PER_MESSAGE = 4000;
+    const MAX_TOKENS_PER_MESSAGE = 2000;
 
     const FILE_EXT='txt';
 
@@ -39,25 +39,25 @@ class Manager extends AbstractManager
 
     const TYPE_META_DESCRIPTION = 'meta_description';
 
-    const PROMPT_TITLE = 'Don\'t use quotes, In less than 5 words write a title for the following:';
+    const PROMPT_TITLE = 'Don\'t use quotes, In less than 5 words write a title for this:';
 
-    const PROMPT_BLURB = 'Don\'t use quotes, write a 250 character summary of the following:';
+    const PROMPT_BLURB = 'Don\'t use quotes, don\'t write in first-person, write a 250 character summary of this:';
 
-    const PROMPT_PUBLICATION_DATE = 'For the following document, don\'t write anything but the date of publication, in this strict format YYYY-MM-DD:';
+    const PROMPT_PUBLICATION_DATE = 'Don\'t write anything but the date of publication, in this strict format YYYY-MM-DD:';
 
-    const PROMPT_TWEET = 'Don\'t use quotes, create a tweet for the following, use less than 255 characters:';
+    const PROMPT_TWEET = 'Don\'t use quotes, only use 255 characters, Don\'t write in first-person, create a tweet for this:';
 
-    const PROMPT_AUTHORS = 'For the following document, make a list of only the documents\' authors\' names, list one name per author, in this format: name, name, name';
+    const PROMPT_AUTHORS = 'Make a list of only the authors\' names, list one name per author, in this format: name, name, name';
 
-    const PROMPT_TAGS = 'Select terms as keywords that represent the most important parts of the following text, limit the number of terms to a total of 6, only answer in this format keyword 1, keyword 2, keyword 3, keyword 4, keyword 5, keyword 6:';
+    const PROMPT_TAGS = 'Select important terms as keywords that represent the most important parts of this text, limit the number of terms to a total of 6, only answer in this format keyword 1, keyword 2, keyword 3, keyword 4, keyword 5, keyword 6:';
 
-    const PROMPT_WRITEUP = 'summarize the following, speak in past tense, don\'t use phrases like "in the past", don\'t create any titles or headings:';
+    const PROMPT_WRITEUP = 'Don\'t write in first-person, don\'t create any titles or headings,  use double newlines to create simple paragraphs, write a draft about this:';
 
-    const PROMPT_SUMMARY = 'Summarize the following, don\'t create any titles or headings:';
+    const PROMPT_SUMMARY = 'Don\'t write in first-person, don\'t create any titles or headings, Summarize this:';
 
-    const PROMPT_FOCUS_KEYPHRASE = 'Pick a sequence of four or five words from the following which encapsulates what it is about:';
+    const PROMPT_FOCUS_KEYPHRASE = 'Don\'t write in first-person, using only 4 of the most important keywords, write a sentance about this:';
 
-    const PROMPT_META_DESCRIPTION = 'Reduce the following paragraph to use only 155 letters including spaces:';
+    const PROMPT_META_DESCRIPTION = 'Encapsulate the meaning of this into a summary of only 155 characters including spaces:';
 
     /**
      * OpenAI chatcompletion implementation.
@@ -125,7 +125,7 @@ class Manager extends AbstractManager
         $this->setCache($text, self::TYPE_RAW);
 
         # writeup
-        $this->content[self::TYPE_WRITEUP] = $this->filterWriteup($this->createContentTypeMultipart($text, self::TYPE_WRITEUP));
+        $this->content[self::TYPE_WRITEUP] = $this->filterWriteup($this->createContentType($text, self::TYPE_WRITEUP, null, true));
         $this->setCache($this->content[self::TYPE_WRITEUP], self::TYPE_WRITEUP);
 
         # html_writeup
@@ -167,49 +167,10 @@ class Manager extends AbstractManager
         $this->setCache($this->content[self::TYPE_META_DESCRIPTION], self::TYPE_META_DESCRIPTION);
 
         # focus_keyphrase
-        // $this->content[self::TYPE_FOCUS_KEYPHRASE] = $this->filterFocusKeyphrase($this->createContentType($this->content[self::TYPE_META_DESCRIPTION], self::TYPE_FOCUS_KEYPHRASE));
-        // $this->setCache($this->content[self::TYPE_FOCUS_KEYPHRASE], self::TYPE_FOCUS_KEYPHRASE);
-        // For SEO Purposes it seems better simply to use the Post title as the focus keyphrase
-        $this->content[self::TYPE_FOCUS_KEYPHRASE] = strtolower($this->content[self::TYPE_TITLE]);
+        $this->content[self::TYPE_FOCUS_KEYPHRASE] = $this->filterFocusKeyphrase($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_FOCUS_KEYPHRASE));
+        $this->setCache($this->content[self::TYPE_FOCUS_KEYPHRASE], self::TYPE_FOCUS_KEYPHRASE);
 
         return $this->content;
-    }
-
-    /**
-     * Loops through long content in smaller chunks to append it to a larger output.
-     *
-     * @param string $text
-     * @param string $type
-     * @return string
-     */
-    public function createContentTypeMultipart(string $text, string $type): string
-    {
-        # If content is already cached just return the cache
-        $cache = $this->getCache($type);
-        if (false !== $cache) return $cache;
-
-        # Set up the content collection string.
-        $content = '';
-
-        # Chunk Text into paragraphs
-        $paragraphs = $this->getParagraphs($text);
-
-        # Resume collecting tmp if it has already partially collected
-        $tmpContent = $this->getTmp($type);
-        if (false !== $tmpContent) {
-            $content = $tmpContent;
-            $paragraphs = $this->resumeContentMultipart($paragraphs, $content); 
-        }
-        
-        # Loop through paragraphs and perform a content request for each paragraph
-        foreach($paragraphs as $paragraph) {
-            # Call createContentType for the paragraph with the multipart argument
-            $content .= $this->createContentType($paragraph, $type, true);
-        }
-
-        $this->removeTmp($type);
-
-        return $content;
     }
 
     /**
@@ -217,51 +178,36 @@ class Manager extends AbstractManager
      *
      * @param string $text
      * @param string $type
-     * @param boolean $multipart
+     * @param int|null $numtokens
+     * @param bool $multipart
+     * @param bool $recursion
      * @return string
      */
-    public function createContentType(string $text, string $type, bool $multipart = false): string
+    public function createContentType(string $text, string $type, int $tokenLimit = null, $multipart = false, $recursion = false): string
     {
-        # If content is already cached just return the cache
-        $cache = $this->getCache($type);
-        if (false !== $cache) return $cache;
+        # If content is not being recursively generated, feed from cache
+        if (!$recursion) {
+            $cache = $this->getCache($type);
+            if (false !== $cache) return $cache;
+        }
 
-        if (false === $multipart) {
-            # Remove the temporary file if it exists
-            $this->removeTmp($type);
+        if (null === $tokenLimit) {
+            $tokenLimit = self::MAX_TOKENS_PER_MESSAGE;
         }
 
         $prompt = $this->prompts[$type];
-        $truncatedText = $this->smartTruncateByTokens($text, $prompt);
+        [$truncated, $remainder] = $this->smartTruncateByTokens($text, $prompt);
 
-        $response = $this->chat->generate($this->getRequest($truncatedText, $prompt));
-
+        $response = $this->chat->generate($this->getRequest(Tokenizer::decode($truncated), $prompt));
         $content = $this->getContentFromResponse($response);
 
-        if ($multipart) {
-            $content .= "\n\n";
+        $remainderCount = count($remainder);
+        if (($remainderCount > 0) && $multipart) {
+            $remainderContent = $this->createContentType(Tokenizer::decode($remainder), $type, $tokenLimit, true, true);
+            $content =  $content . "\n\n" . $remainderContent;
         }
 
-        $this->setTmp($content, $type, $multipart);
-
         return $content;
-    }
-
-    /**
-     * Simply truncating content can have bad interactions when working with chat completion
-     * Instead of chopping off the content, in the middle of a word or sentance, remove
-     * the last bit after a double line break.
-     *
-     * @param string $content
-     * @param integer $offset
-     * @param integer|null $length
-     * @return string
-     */
-    public function smartTruncate(string $content, int $offset, int $length = null): string
-    {
-        $newContent = substr($content, $offset, $length);
-        $lastParagraph = strrpos($newContent, "\n\n");
-        return substr($newContent, 0, $lastParagraph);
     }
 
     /**
@@ -269,20 +215,24 @@ class Manager extends AbstractManager
      *
      * @param string $content
      * @param string $prompt
-     * @param integer|null $numTokens
+     * @param integer|null $tokenLimit
      * @return string
      */
-    protected function smartTruncateByTokens(string $content, string $prompt, int $numTokens = null): string
+    protected function smartTruncateByTokens(string $content, string $prompt, int $tokenLimit = null): array
     {
-        if (null === $numTokens) {
-            $numTokens = self::MAX_TOKENS_PER_MESSAGE;
+        if (null === $tokenLimit) {
+            $tokenLimit = self::MAX_TOKENS_PER_MESSAGE;
         }
 
-        $promptTokens = $tokens = Tokenizer::encode($prompt);
+        $tokens = Tokenizer::encode($content);
+        $promptTokens = Tokenizer::encode($prompt);
         $numPromptTokens = count($promptTokens);
-        $numTokens = $numTokens - $numPromptTokens;
+        $maxSlice = $tokenLimit - $numPromptTokens;
 
-        return $this->truncateByTokens($content, $numTokens);
+        $truncated = array_slice($tokens, 0, $maxSlice);
+        $remainder = array_slice($tokens, $maxSlice);
+
+        return [$truncated, $remainder];
     }
 
     /**
@@ -305,15 +255,16 @@ class Manager extends AbstractManager
     }
 
     /**
-     * Filter opterations on writeup
+     * Applies certain filters to the writeup.
      *
      * @param string $text
      * @return string
      */
     protected function filterWriteup(string $text): string 
     {
-        // Clean unicode characters
-        return $this->filterUnicode($text);
+        $cleaned = $this->filterUnicode($text);
+        $cleaned = preg_replace('/(\.)([[:alpha:]]{2,})/', '$1 $2', $cleaned);
+        return $cleaned;
     }
 
     /**
@@ -361,8 +312,7 @@ class Manager extends AbstractManager
      */
     protected function filterMetaDescription(string $content): string
     {
-        # Reduce to 155 characters
-        $content = substr(trim($this->filterDoubleQuotes($content)), 0, 155);
+        $content = trim($this->filterDoubleQuotes($content));
         $content = $this->filterUnicode($content);
 
         return $content;
@@ -384,8 +334,7 @@ class Manager extends AbstractManager
 
         $content = $this->filterUnicode($content);
 
-        # Reduce to only 5 words
-        return preg_replace('/((\w+\W*){6}(\w+))(.*)/', '${1}', $content);
+        return $content;
     }
 
     /**
@@ -496,10 +445,6 @@ class Manager extends AbstractManager
      */
     protected function filterAuthor(string $author): string
     {
-        if (strlen($author) > 100) {
-            $author = substr($author, 0, 100);
-        }
-
         $author = $this->filterUnicode($author);
 
         return trim($this->filterDoubleQuotes($author));
@@ -523,7 +468,6 @@ class Manager extends AbstractManager
      * @return string
      */
     protected function filterUnicode(string $text): string {
-
         return html_entity_decode(preg_replace("/U\+([0-9A-F]{4})/s", "&#x\\1;", $text), ENT_NOQUOTES, 'UTF-8');
     }
 
@@ -532,15 +476,21 @@ class Manager extends AbstractManager
      *
      * @param string $text
      * @param string $prompt
+     * @param int $tokenLimit
      * @return OpenAiRequest
      */
-    protected function getRequest(string $text, string $prompt): OpenAiRequest
+    protected function getRequest(string $text, string $prompt, int $tokenLimit = null): OpenAiRequest
     {
         #sanitize the text
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
         $persona = $this->chat->getPersona();
 
+        if (null === $tokenLimit) {
+            $tokenLimit = self::MAX_TOKENS_PER_MESSAGE;
+        }
+
         return new OpenAiRequest([
+            'max_tokens' => $tokenLimit,
             'messages' => [
                 [
                     'role'      => 'system',

@@ -27,3 +27,11 @@ Route::middleware('auth:sanctum')->get('/blog/{id}', [BlogController::class, 'sh
 Route::middleware('auth:sanctum')->post('/blog', [BlogController::class, 'store']);
 Route::middleware('auth:sanctum')->put('/blog/{id}', [BlogController::class, 'update']);
 Route::middleware('auth:sanctum')->delete('/blog/{id}', [BlogController::class, 'delete']);
+
+# AiModel
+Route::middleware('auth:sanctum')->get('/ai_model', [AiModelController::class, 'index']);
+// Route::middleware('auth:sanctum')->get('/blog/domain/{domainName}', [AiModelController::class, 'domainName']);
+// Route::middleware('auth:sanctum')->get('/blog/{id}', [BlAiModelControllerogController::class, 'show']);
+// Route::middleware('auth:sanctum')->post('/blog', [AiModelController::class, 'store']);
+// Route::middleware('auth:sanctum')->put('/blog/{id}', [AiModelController::class, 'update']);
+// Route::middleware('auth:sanctum')->delete('/blog/{id}', [AiModelController::class, 'delete']);

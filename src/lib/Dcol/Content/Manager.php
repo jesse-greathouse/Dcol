@@ -39,23 +39,23 @@ class Manager extends AbstractManager
 
     const TYPE_META_DESCRIPTION = 'meta_description';
 
-    const PROMPT_TITLE = 'Don\'t use quotes, In less than 5 words write a title for this:';
+    const PROMPT_TITLE = 'Don\'t use quotes, using only 4 of the most important keywords write a title for this:';
 
-    const PROMPT_BLURB = 'Don\'t use quotes, don\'t write in first-person, write a 250 character summary of this:';
+    const PROMPT_BLURB = 'Don\'t use quotes, write a 250 character summary of this:';
 
     const PROMPT_PUBLICATION_DATE = 'Don\'t write anything but the date of publication, in this strict format YYYY-MM-DD:';
 
-    const PROMPT_TWEET = 'Don\'t use quotes, only use 255 characters, Don\'t write in first-person, create a tweet for this:';
+    const PROMPT_TWEET = 'Only use 255 characters, create a tweet for this:';
 
     const PROMPT_AUTHORS = 'Make a list of only the authors\' names, list one name per author, in this format: name, name, name';
 
     const PROMPT_TAGS = 'Select important terms as keywords that represent the most important parts of this text, limit the number of terms to a total of 6, only answer in this format keyword 1, keyword 2, keyword 3, keyword 4, keyword 5, keyword 6:';
 
-    const PROMPT_WRITEUP = 'Don\'t write in first-person, don\'t create any titles or headings,  use double newlines to create simple paragraphs, write a draft about this:';
+    const PROMPT_WRITEUP = 'Use reported speech, don\'t create any titles or headings, use double newlines to create simple paragraphs, write a draft about this:';
 
-    const PROMPT_SUMMARY = 'Don\'t write in first-person, don\'t create any titles or headings, Summarize this:';
+    const PROMPT_SUMMARY = 'Don\'t create any titles or headings, Summarize this:';
 
-    const PROMPT_FOCUS_KEYPHRASE = 'Don\'t write in first-person, using only 4 of the most important keywords, write a sentance about this:';
+    const PROMPT_FOCUS_KEYPHRASE = 'Using only 4 of the most important keywords reduce this text to a single sentence:';
 
     const PROMPT_META_DESCRIPTION = 'Encapsulate the meaning of this into a summary of only 155 characters including spaces:';
 
@@ -78,18 +78,7 @@ class Manager extends AbstractManager
      *
      * @var array
      */
-    protected $prompts = [
-        Manager::TYPE_TITLE             => Manager::PROMPT_TITLE,
-        Manager::TYPE_BLURB             => Manager::PROMPT_BLURB,
-        Manager::TYPE_PUBLICATION_DATE  => Manager::PROMPT_PUBLICATION_DATE,
-        Manager::TYPE_TWEET             => Manager::PROMPT_TWEET,
-        Manager::TYPE_AUTHORS           => Manager::PROMPT_AUTHORS,
-        Manager::TYPE_TAGS              => Manager::PROMPT_TAGS,
-        Manager::TYPE_WRITEUP           => Manager::PROMPT_WRITEUP,
-        Manager::TYPE_SUMMARY           => Manager::PROMPT_SUMMARY,
-        Manager::TYPE_FOCUS_KEYPHRASE   => Manager::PROMPT_FOCUS_KEYPHRASE,
-        Manager::TYPE_META_DESCRIPTION  => Manager::PROMPT_META_DESCRIPTION,
-    ];
+    protected $prompts;
 
     /**
      * Constructor.
@@ -106,6 +95,7 @@ class Manager extends AbstractManager
         $this->setCacheDir($baseCacheDir);
         $this->setTmpDir($baseTmpDir);
         $this->setFileExtension(Manager::FILE_EXT);
+        $this->getPrompts();
     }
 
     /**
@@ -128,6 +118,10 @@ class Manager extends AbstractManager
         $this->content[self::TYPE_WRITEUP] = $this->filterWriteup($this->createContentType($text, self::TYPE_WRITEUP, null, true));
         $this->setCache($this->content[self::TYPE_WRITEUP], self::TYPE_WRITEUP);
 
+        # title
+        $this->content[self::TYPE_TITLE] = $this->filterTitle($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_TITLE));
+        $this->setCache($this->content[self::TYPE_TITLE], self::TYPE_TITLE);
+
         # html_writeup
         $this->content[self::TYPE_HTML_WRITEUP] = $this->fiterHtml($this->content[self::TYPE_WRITEUP], self::TYPE_HTML_WRITEUP);
         $this->setCache($this->content[self::TYPE_HTML_WRITEUP], self::TYPE_HTML_WRITEUP);
@@ -140,10 +134,6 @@ class Manager extends AbstractManager
         $authors = $this->createContentType($text, self::TYPE_AUTHORS);
         $this->setCache($authors, self::TYPE_AUTHORS);
         $this->content[self::TYPE_AUTHORS] = $this->filterAuthors(explode(',', $authors));
-
-        # title
-        $this->content[self::TYPE_TITLE] = $this->filterTitle($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_TITLE));
-        $this->setCache($this->content[self::TYPE_TITLE], self::TYPE_TITLE);
 
         # blurb
         $this->content[self::TYPE_BLURB] = $this->filterUnicode($this->createContentType($this->content[self::TYPE_WRITEUP], self::TYPE_BLURB));
@@ -195,7 +185,13 @@ class Manager extends AbstractManager
             $tokenLimit = self::MAX_TOKENS_PER_MESSAGE;
         }
 
-        $prompt = $this->prompts[$type];
+        $title = null;
+
+        if (isset($this->content[self::TYPE_TITLE])) {
+            $title = $this->content[self::TYPE_TITLE];
+        }
+
+        $prompt = $this->prompts[$type]($title);
         [$truncated, $remainder] = $this->smartTruncateByTokens($text, $prompt);
 
         $response = $this->chat->generate($this->getRequest(Tokenizer::decode($truncated), $prompt));
@@ -218,7 +214,7 @@ class Manager extends AbstractManager
      * @param integer|null $tokenLimit
      * @return string
      */
-    protected function smartTruncateByTokens(string $content, string $prompt, int $tokenLimit = null): array
+    public function smartTruncateByTokens(string $content, string $prompt, int $tokenLimit = null): array
     {
         if (null === $tokenLimit) {
             $tokenLimit = self::MAX_TOKENS_PER_MESSAGE;
@@ -242,7 +238,7 @@ class Manager extends AbstractManager
      * @param integer|null $numTokens
      * @return string
      */
-    protected function truncateByTokens(string $content, int $numTokens = null): string
+    public function truncateByTokens(string $content, int $numTokens = null): string
     {
         if (null === $numTokens) {
             $numTokens = self::MAX_TOKENS_PER_MESSAGE;
@@ -314,6 +310,8 @@ class Manager extends AbstractManager
     {
         $content = trim($this->filterDoubleQuotes($content));
         $content = $this->filterUnicode($content);
+        # DB column is varchar 255 so make sure it doesn't exceed column length
+        $content = substr($content, 0, 255);
 
         return $content;
     }
@@ -331,8 +329,9 @@ class Manager extends AbstractManager
 
         # Trim and remove quotes
         $content = trim($this->filterDoubleQuotes($content));
-
         $content = $this->filterUnicode($content);
+        # DB column is varchar 255 so make sure it doesn't exceed column length
+        $content = substr($content, 0, 255);
 
         return $content;
     }
@@ -559,6 +558,59 @@ class Manager extends AbstractManager
      */ 
     public function getPrompts()
     {
+        if ($this->prompts === null) {
+            $this->prompts = [
+                Manager::TYPE_TITLE             => function() {
+                                                    return Manager::PROMPT_TITLE;
+                                                },
+                Manager::TYPE_BLURB             => function($title = null) {
+                                                    if (null === $title) {
+                                                        return Manager::PROMPT_BLURB;
+                                                    } else {
+                                                        return sprintf("Given this title \"%s\", %s",
+                                                            $title, Manager::PROMPT_BLURB
+                                                        );
+                                                    }
+                                                },
+                Manager::TYPE_PUBLICATION_DATE  => function() {
+                                                    return Manager::PROMPT_PUBLICATION_DATE;
+                                                },
+                Manager::TYPE_TWEET             => function() {
+                                                    return Manager::PROMPT_TWEET;
+                                                },
+                Manager::TYPE_AUTHORS           => function() {
+                                                    return Manager::PROMPT_AUTHORS;
+                                                },
+                Manager::TYPE_TAGS              => function() {
+                                                    return Manager::PROMPT_TAGS;
+                                                },
+                Manager::TYPE_WRITEUP           => function() {
+                                                    return Manager::PROMPT_WRITEUP;
+                                                },
+                Manager::TYPE_SUMMARY           => function() {
+                                                    return Manager::PROMPT_SUMMARY;
+                                                },
+                Manager::TYPE_FOCUS_KEYPHRASE   => function($title = null) {
+                                                    if (null === $title) {
+                                                        return Manager::PROMPT_FOCUS_KEYPHRASE;
+                                                    } else {
+                                                        return sprintf("Given this title \"%s\", %s",
+                                                            $title, Manager::PROMPT_FOCUS_KEYPHRASE
+                                                        );
+                                                    }
+                                                },
+                Manager::TYPE_META_DESCRIPTION  => function($title = null) {
+                                                    if (null === $title) {
+                                                        return Manager::PROMPT_META_DESCRIPTION;
+                                                    } else {
+                                                        return sprintf("Given this title \"%s\", %s",
+                                                            $title, Manager::PROMPT_META_DESCRIPTION
+                                                        );
+                                                    }
+                                                },
+            ];
+        }
+
         return $this->prompts;
     }
 }

@@ -21,7 +21,7 @@ class TrainingFileCreate extends Command
 {
     use OutputCheck, PrependsOutput, PrependsTimestamp;
 
-    const MAX_TOKENS_PER_MESSAGE = 3900;
+    const MAX_TOKENS_PER_MESSAGE = 2000;
 
     const DEFAULT_SEO_SCORE_THRESHOLD = 70;
 
@@ -102,10 +102,11 @@ class TrainingFileCreate extends Command
         $varDir = $this->getVarDir('training');
         $tmpDir = $this->getTmpDir('training');
         
-        $this->info("Training AI For: \"{$blog->domain_name}\" -- Found $count eligible blog posts to train.");
+        $this->info("Creating AI training file For: \"{$blog->domain_name}\" -- Found $count eligible blog posts to train.");
         $this->newLine();
 
-        $lines = [];
+        $manager = new TrainingManager($blog, $varDir, $tmpDir);
+        $firstLine = true;
 
         foreach($this->getBlogPosts() as $blogPost) {
             // Get the original Content Prompts
@@ -120,12 +121,17 @@ class TrainingFileCreate extends Command
                     continue;
                 }
 
-                $lines[] = $this->getContentLine($type, $persona, $contentPrompts[$type], $postedContent[$type]);
+                $line = $this->getContentLine($type, $persona, $contentPrompts[$type], $postedContent[$type]);
+                $manager->writeTrainingFileLine($line, $suffix, $firstLine);
+                $firstLine = false;
+                // clearing memory
+                $line = null;
             }
-        }
 
-        $manager = new TrainingManager($blog, $varDir, $tmpDir);
-        $manager->createTrainingFile($lines, $suffix);
+            $contentPrompts = null;
+            $postedContent = null;
+        }
+        
         $path = $manager->getCacheFile($suffix);
 
         if ($this->isVerbose()) {
@@ -165,21 +171,23 @@ class TrainingFileCreate extends Command
     {
         // Setup Content Manager For Blog Post Context
         $document = $blogPost->document;
-        $contentsVarDir = $this->getVarDir('contents');
-        $contentsTmpDir = $this->getTmpDir('contents');
+        $contentsVarDir = $this->getVarDir("contents/{$blogPost->blog->domain_name}");
+        $contentsTmpDir = $this->getTmpDir("contents/{$blogPost->blog->domain_name}");
         $uri = $document->uri;
         $contentManager = new ContentManager(new ChatCompletion($this->getAuthKey()), $contentsVarDir, $contentsTmpDir, $uri);
         $prompts = $contentManager->getPrompts();
 
         // Retrieve cached content
-        $raw = $contentManager->getCache(ContentManager::TYPE_RAW);
-        $writeUpTruncated = $contentManager->smartTruncate($contentManager->getCache(ContentManager::TYPE_WRITEUP), 0, 10000);
+        $raw = $this->filterUnicode($contentManager->getCache(ContentManager::TYPE_RAW));
+        $rawTruncated = $this->firstNWords($raw);
+        $cleanedWriteup = $this->filterUnicode($contentManager->getCache(ContentManager::TYPE_WRITEUP));
+        $writeUpTruncated = $contentManager->truncateByTokens($cleanedWriteup);
 
         // Create Prompts For content
-        $writeUp = $this->getContentPromptByType($prompts[ContentManager::TYPE_WRITEUP], $raw);
-        $title = $this->getContentPromptByType($prompts[ContentManager::TYPE_TITLE], $writeUpTruncated);
-        $blurb = $this->getContentPromptByType($prompts[ContentManager::TYPE_BLURB], $writeUpTruncated);
-        $metaDescription = $this->getContentPromptByType($prompts[ContentManager::TYPE_META_DESCRIPTION], $writeUpTruncated);
+        $title = $this->getContentPromptByType($prompts[ContentManager::TYPE_TITLE](), $writeUpTruncated);
+        $blurb = $this->getContentPromptByType($prompts[ContentManager::TYPE_BLURB]($blogPost->title,), $writeUpTruncated);
+        $metaDescription = $this->getContentPromptByType($prompts[ContentManager::TYPE_META_DESCRIPTION]($blogPost->title,), $writeUpTruncated);
+        $writeUp = $this->getContentPromptByType($prompts[ContentManager::TYPE_WRITEUP](), $rawTruncated);
 
         return [
             ContentManager::TYPE_TITLE              => $title,
@@ -187,6 +195,22 @@ class TrainingFileCreate extends Command
             ContentManager::TYPE_WRITEUP            => $writeUp,
             ContentManager::TYPE_BLURB              => $blurb,
         ];
+    }
+
+    protected function firstNwords($s, $limit = 900)
+    {
+        $pieces = explode(" ", $s);
+        return implode(" ", array_splice($pieces, 0, $limit)); 
+    }
+
+    /**
+     * Converts Unicode strings into utf-8
+     *
+     * @param string $text
+     * @return string
+     */
+    protected function filterUnicode(string $text): string {
+        return html_entity_decode(preg_replace("/U\+([0-9A-F]{4})/s", "&#x\\1;", $text), ENT_NOQUOTES, 'UTF-8');
     }
 
     protected function filterTabs(string $text): string
@@ -212,7 +236,7 @@ class TrainingFileCreate extends Command
         ];
     }
 
-    protected function getContentLine(string $type, string $persona, string $user, $assistant): array
+    protected function getContentLine(string $type, string $persona, string $user, string $assistant): array
     {
         return [
             'type'      => $type,
@@ -244,7 +268,6 @@ class TrainingFileCreate extends Command
         $cleaned = str_replace("</p>\n<p>", "\n\n", $cleaned);
         $cleaned = trim(strip_tags($cleaned));
         $cleaned = $this->filterTabs($cleaned);
-        $cleaned = $this->filterNewlines($cleaned);
         
         return $this->truncateByTokens($cleaned);
     }
@@ -257,7 +280,6 @@ class TrainingFileCreate extends Command
         $cleaned = str_replace("</p>\n<p>", "\n\n", $cleaned);
         $cleaned = trim(strip_tags($cleaned));
         $cleaned = $this->filterTabs($cleaned);
-        $cleaned = $this->filterNewlines($cleaned);
         
         return $this->truncateByTokens($cleaned);
     }
@@ -277,8 +299,10 @@ class TrainingFileCreate extends Command
 
         $tokens = Tokenizer::encode($content);
         $truncated = array_slice($tokens, 0, $numTokens);
+        $output = Tokenizer::decode($truncated);
+        $truncated = null;
 
-        return Tokenizer::decode($truncated);
+        return $output;
     }
 
     /**
@@ -288,7 +312,28 @@ class TrainingFileCreate extends Command
      */
     protected function getBlogPosts(): Collection
     {
-        return $this->getBlogPostsQb()->get();
+        return $this->getBlogPostsQb()->get([
+            'blog_posts.id',
+            'blog_posts.post_id',
+            'blog_posts.slug',
+            'blog_posts.url',
+            'blog_posts.author',
+            'blog_posts.publication_date',
+            'blog_posts.type',
+            'blog_posts.title',
+            'blog_posts.meta_description',
+            'blog_posts.focus_keyphrase',
+            'blog_posts.content',
+            'blog_posts.category',
+            'blog_posts.featured_media',
+            'blog_posts.is_published',
+            'blog_posts.is_tweeted',
+            'blog_posts.is_ai_model_trained',
+            'blog_posts.blog_id',
+            'blog_posts.document_id',
+            'blog_posts.is_locked',
+            'blog_posts.seo_score',
+        ]);
     }
 
     /**
@@ -312,15 +357,17 @@ class TrainingFileCreate extends Command
         $seoScoreThreshold = $this->getSeoScoreThreshold();
 
         return BlogPost::where('blog_id', $blog->id)
-                        ->where('is_published', true)
-                        ->where('seo_score', '>=', $seoScoreThreshold)
+                        ->join('documents', 'documents.id', '=', 'blog_posts.document_id')
+                        ->where('documents.active', true)
+                        ->where('blog_posts.is_published', true)
+                        ->where('blog_posts.seo_score', '>=', $seoScoreThreshold)
                         ->whereNot(function (Builder $query) {
-                            $query->where('meta_description', '')
-                                ->orWhere('meta_description', null);
+                            $query->where('blog_posts.meta_description', '')
+                                ->orWhere('blog_posts.meta_description', null);
                         })
                         ->whereNot(function (Builder $query) {
-                            $query->where('focus_keyphrase', '')
-                                ->orWhere('focus_keyphrase', null);
+                            $query->where('blog_posts.focus_keyphrase', '')
+                                ->orWhere('blog_posts.focus_keyphrase', null);
                         });
     }
 

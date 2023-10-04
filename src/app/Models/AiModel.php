@@ -17,6 +17,7 @@ class AiModel extends Model
     const STATUS_SUCCEEDED = 'succeeded';
     const STATUS_FAILED = 'failed';
     const STATUS_CANCELLED = 'cancelled';
+    const STATUS_VALIDATING_FILES = 'validating_files';
 
     /**
      * Get the training file for the ai model.

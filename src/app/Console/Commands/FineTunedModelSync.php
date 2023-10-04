@@ -123,7 +123,6 @@ class FineTunedModelSync extends Command
                 $aiModel->hyperparameters = $this->jsonField('hyperparameters', $liveAiModelList[$id]);
             }
 
-
             $aiModel->save();
         }
 
@@ -243,7 +242,8 @@ class FineTunedModelSync extends Command
         $qb = $qb->where(function (Builder $query) {
             $query->where('status', AiModel::STATUS_CREATED)
                 ->orWhere('status', AiModel::STATUS_PENDING)
-                ->orWhere('status', AiModel::STATUS_RUNNING);
+                ->orWhere('status', AiModel::STATUS_RUNNING)
+                ->orWhere('status', AiModel::STATUS_VALIDATING_FILES);
 
         });
 

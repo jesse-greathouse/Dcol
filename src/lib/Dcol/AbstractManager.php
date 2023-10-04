@@ -94,6 +94,25 @@ abstract class AbstractManager {
      * @param string $fileName
      * @return void
      */
+    public function writeCacheLine(string|null $content, string $fileName): void
+    {
+        if (null === $content) return;
+
+        $file = $this->getCacheFile($fileName);
+        try {
+            $this->writeFile($content, $file, true);
+        } catch(\Exception $e) {
+            throw new \Exception("Unable to write to cache file: \"$file\": " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Writes the content to the given file cache by type
+     *
+     * @param string $content|null
+     * @param string $fileName
+     * @return void
+     */
     public function setCache(string|null $content, string $fileName): void
     {
         if (null === $content) return;
@@ -102,7 +121,7 @@ abstract class AbstractManager {
         try {
             $this->writeFile($content, $file);
         } catch(\Exception $e) {
-            throw new \Exception("Unable to write to cahce file: \"$file\": " . $e->getMessage());
+            throw new \Exception("Unable to write to cache file: \"$file\": " . $e->getMessage());
         }
     }
 

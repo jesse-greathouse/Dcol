@@ -41,6 +41,42 @@ class Manager extends AbstractManager
         $this->setFileExtension(Manager::FILE_EXT);
     }
 
+    public function writeTrainingFileLine(array $line, string $suffix, bool $firstLine = false)
+    {
+        ['type' => $type, 'system' => $system, 'user' => $user, 'assistant' => $assistant] = $line;
+        $row = [
+            'messages' => [
+                [
+                    'role'      => 'system',
+                    'content'   => "You are $system",
+                ],
+                [
+                    'role'      => 'user',
+                    'content'   => $user,
+                ],
+                [
+                    'role'      => 'assistant',
+                    'content'   => $assistant,
+                ],
+            ]
+        ];
+
+        try {
+            $txt = '';
+
+            if (!$firstLine) {
+                $txt .= "\n";
+            }
+            
+            $txt .= json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE);
+            
+        } catch (\Exception $e) {
+            throw new \Exception("unable to encode json for: " . print_r($line) . "\n\n" . $e->getMessage());
+        }
+
+        $this->writeCacheLine($txt, $suffix);
+    }
+
     public function createTrainingFile(array $lines, string $suffix ) 
     {
         $job = '';
@@ -132,7 +168,7 @@ class Manager extends AbstractManager
     public function setTmpDir(string $tmpDir): AbstractManager
     {
         $blog = $this->getBlog();
-        $dir = $cacheDir .  '/' . $blog->domain_name;
+        $dir = $tmpDir .  '/' . $blog->domain_name;
         if (!is_dir($dir)) {
             $this->buildTrainingDir($tmpDir, $uri);
         }

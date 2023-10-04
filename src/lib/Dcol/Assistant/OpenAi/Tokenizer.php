@@ -4,6 +4,16 @@ namespace Dcol\Assistant\OpenAi;
 
 final class Tokenizer
 {
+    private static $raw_chars;
+
+    private static $rencoder;
+
+    private static $encoder;
+
+    private static $bpe_file;
+
+    private static $byte_encoder;
+
     private static function utf8Encode(string $str): string 
     {
         $str .= $str;
@@ -25,23 +35,40 @@ final class Tokenizer
         {
             return $bpe_tokens;
         }
-        $raw_chars = file_get_contents(dirname(__FILE__) . "/characters.json");
-        $byte_encoder = json_decode($raw_chars, true);
-        if(empty($byte_encoder))
-        {
-            error_log('Failed to load characters.json: ' . $raw_chars);
-            return $bpe_tokens;
+
+        if (static::$raw_chars === null) {
+            static::$raw_chars = file_get_contents(dirname(__FILE__) . "/characters.json");
         }
-        $rencoder = file_get_contents(dirname(__FILE__) . "/encoder.json");
-        $encoder = json_decode($rencoder, true);
-        if(empty($encoder))
+
+        if (static::$byte_encoder === null) {
+            static::$byte_encoder = json_decode(static::$raw_chars, true);
+        }
+
+        if(empty(static::$byte_encoder))
         {
-            error_log('Failed to load encoder.json: ' . $rencoder);
+            error_log('Failed to load characters.json: ' . static::$raw_chars);
             return $bpe_tokens;
         }
 
-        $bpe_file = file_get_contents(dirname(__FILE__) . "/vocab.bpe");
-        if(empty($bpe_file))
+        if (static::$rencoder === null) {
+            static::$rencoder = file_get_contents(dirname(__FILE__) . "/encoder.json");
+        }
+
+        if (static::$encoder === null) {
+            static::$encoder = json_decode(static::$rencoder, true);
+        }
+
+        if(empty(static::$encoder))
+        {
+            error_log('Failed to load encoder.json: ' . static::$rencoder);
+            return $bpe_tokens;
+        }
+
+        if (static::$bpe_file === null) {
+            static::$bpe_file = file_get_contents(dirname(__FILE__) . "/vocab.bpe");
+        }
+
+        if(empty(static::$bpe_file))
         {
             error_log('Failed to load vocab.bpe');
             return $bpe_tokens;
@@ -53,7 +80,8 @@ final class Tokenizer
             error_log('Failed to match string: ' . $text);
             return $bpe_tokens;
         }
-        $lines = preg_split('/\r\n|\r|\n/', $bpe_file);
+    
+        $lines = preg_split('/\r\n|\r|\n/', static::$bpe_file);
         $bpe_merges = array();
         $bpe_merges_temp = array_slice($lines, 1, count($lines), true);
         foreach($bpe_merges_temp as $bmt)
@@ -88,24 +116,25 @@ final class Tokenizer
             $result_word = '';
             foreach($chars as $char)
             {
-                if(isset($byte_encoder[self::unichr($char)]))
+                if(isset(static::$byte_encoder[self::unichr($char)]))
                 {
-                    $result_word .= $byte_encoder[self::unichr($char)];
+                    $result_word .= static::$byte_encoder[self::unichr($char)];
                 }
             }
             $new_tokens_bpe = self::bpe($result_word, $bpe_ranks, $cache);
             $new_tokens_bpe = explode(' ', $new_tokens_bpe);
+
             foreach($new_tokens_bpe as $x)
             {
-                if(isset($encoder[$x]))
+                if(isset(static::$encoder[$x]))
                 {
                     if(isset($new_tokens[$x]))
                     {
-                        $new_tokens[rand() . '---' . $x] = $encoder[$x];
+                        $new_tokens[rand() . '---' . $x] = static::$encoder[$x];
                     }
                     else
                     {
-                        $new_tokens[$x] = $encoder[$x];
+                        $new_tokens[$x] = static::$encoder[$x];
                     }
                 }
                 else
@@ -120,6 +149,7 @@ final class Tokenizer
                     }
                 }
             }
+
             foreach($new_tokens as $ninx => $nval)
             {
                 if(isset($bpe_tokens[$ninx]))
@@ -131,33 +161,55 @@ final class Tokenizer
                     $bpe_tokens[$ninx] = $nval;
                 }
             }
+
+            $bpe_merges_temp = null;
+            $bpe_merges = null;
+            $lines = null;
+            $new_tokens_bpe = null;
+            $token = null;
+            $chars = null;
+            $new_tokens = null;
         }
+
         return $bpe_tokens;
     }
 
     public static function decode($tokens) 
     {
-        $rencoder = file_get_contents(dirname(__FILE__) . "/encoder.json");
-        $encoder = json_decode($rencoder, true);
-        if(empty($encoder))
+        if (static::$rencoder === null) {
+            static::$rencoder = file_get_contents(dirname(__FILE__) . "/encoder.json");
+        }
+
+        if (static::$encoder === null) {
+            static::$encoder = json_decode(static::$rencoder, true);
+        }
+
+        if(empty(static::$encoder))
         {
-            error_log('Failed to load encoder.json: ' . $rencoder);
+            error_log('Failed to load encoder.json: ' . static::$rencoder);
             return false;
         }
         $decoder = array();
-        foreach($encoder as $index => $val)
+        foreach(static::$encoder as $index => $val)
         {
             $decoder[$val] = $index;
         }
-        $raw_chars = file_get_contents(dirname(__FILE__) . "/characters.json");
-        $byte_encoder = json_decode($raw_chars, true);
-        if(empty($byte_encoder))
+
+        if (static::$raw_chars === null) {
+            static::$raw_chars = file_get_contents(dirname(__FILE__) . "/characters.json");
+        }
+    
+        if (static::$byte_encoder === null) {
+            static::$byte_encoder = json_decode(static::$raw_chars, true);
+        }
+    
+        if(empty(static::$byte_encoder))
         {
-            error_log('Failed to load characters.json: ' . $raw_chars);
+            error_log('Failed to load characters.json: ' . static::$raw_chars);
             return false;
         }
         $byte_decoder = array();
-        foreach($byte_encoder as $index => $val)
+        foreach(static::$byte_encoder as $index => $val)
         {
             $byte_decoder[$val] = $index;
         }
@@ -192,6 +244,11 @@ final class Tokenizer
         for ($i = 0, $j = count($final_arr); $i < $j; ++$i) {
             $output .= chr($final_arr[$i]);
         }
+    
+        $final_arr = null;
+        $byte_decoder = null;
+        $decoder = null;
+
         return $output;
     }
 

@@ -142,6 +142,7 @@ class TrainingFileSync extends Command
     protected function getAiTrainingFiles(): Collection
     {
         return $this->getTrainingFilesQb()->orderBy('ai_training_files.ai_created_at', 'DESC')->get([
+            'ai_training_files.id',
             'ai_training_files.ai_id',
             'ai_training_files.bytes',
             'ai_training_files.filename',
